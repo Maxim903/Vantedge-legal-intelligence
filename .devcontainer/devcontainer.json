@@ -1,0 +1,36 @@
+{
+  "name": "Vantedge Legal Intelligence",
+  // Image de base Ubuntu maintenue pour les conteneurs de développement.
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  // Outils et environnements installés dans le conteneur.
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/dhoeric/features/google-cloud-cli:1": {}
+  },
+  // Extensions VS Code utiles au développement du projet.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "redhat.vscode-yaml"
+      ]
+    }
+  },
+  // Port de développement de l'application web.
+  "forwardPorts": [3000],
+  // Installation de uv et pre-commit après la création du conteneur.
+  "postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && \"$HOME/.local/bin/uv\" tool install pre-commit && \"$HOME/.local/bin/pre-commit\" install"
+}
