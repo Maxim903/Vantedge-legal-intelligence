@@ -16,7 +16,11 @@ dependencies = [
     "httpx",
     "google-cloud-bigquery",
     "google-cloud-storage",
+    "lxml",
 ]
+
+[project.scripts]
+vil-pipeline = "vil_pipeline.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -28,10 +32,14 @@ dev = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"" = "src", "prompts" = "prompts"}
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["vil_pipeline*", "prompts*"]
+
+[tool.setuptools.package-data]
+prompts = ["*.md"]
 
 [tool.ruff]
 target-version = "py312"
@@ -49,5 +57,5 @@ files = ["src/vil_pipeline"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 addopts = "--cov=vil_pipeline --cov-report=term-missing --cov-fail-under=80"

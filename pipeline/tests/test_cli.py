@@ -1,1 +1,219 @@
 """Tests for the pipeline command-line interface."""
+
+import tarfile
+from pathlib import Path
+from unittest.mock import Mock
+
+from typer.testing import CliRunner
+
+import vil_pipeline.cli as cli
+from vil_pipeline.jobs.load_corpus import LoadStats, iter_corpus
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "legi"
+runner = CliRunner()
+
+
+def test_load_corpus_command_passes_options_and_prints_summary(
+	tmp_path,
+	monkeypatch,
+):
+	archive = tmp_path / "legi.tar.gz"
+	archive.touch()
+	load = Mock(
+		return_value=LoadStats(read=12, inserted=8, updated=2, ignored=2),
+	)
+	monkeypatch.setattr(cli, "load_corpus", load)
+	times = iter((10.0, 12.345))
+	monkeypatch.setattr(cli, "perf_counter", lambda: next(times))
+
+	result = runner.invoke(
+		cli.app,
+		[
+			"load-corpus",
+			"--archive",
+			str(archive),
+			"--livre",
+			"II",
+			"--dry-run",
+		],
+	)
+
+	assert result.exit_code == 0, result.output
+	load.assert_called_once_with(archive, livre="II", dry_run=True)
+	assert "lus 12" in result.output
+	assert "insérés 8" in result.output
+	assert "mis à jour 2" in result.output
+	assert "ignorés 2" in result.output
+	assert "durée 2.35 s" in result.output
+
+
+def test_load_corpus_command_requires_archive_option():
+	result = runner.invoke(cli.app, ["load-corpus"])
+
+	assert result.exit_code != 0
+	assert "--archive" in result.output
+
+
+def test_load_corpus_command_help_lists_requested_options():
+	result = runner.invoke(cli.app, ["load-corpus", "--help"])
+
+	assert result.exit_code == 0
+	assert "--archive" in result.output
+	assert "--livre" in result.output
+	assert "--dry-run" in result.output
+
+
+def test_migrate_command_uses_configured_project_and_location(monkeypatch):
+	client = Mock()
+	factory = Mock(return_value=client)
+	migrate = Mock(return_value=["0003_entites_extraites", "0004_ops_pipeline_runs"])
+	monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+	monkeypatch.setenv("BQ_LOCATION", "EU")
+	monkeypatch.setattr(cli.bigquery, "Client", factory)
+	monkeypatch.setattr(cli, "apply_migrations", migrate)
+
+	result = runner.invoke(cli.app, ["migrate"])
+
+	assert result.exit_code == 0, result.output
+	factory.assert_called_once_with(project="test-project", location="EU")
+	migrate.assert_called_once_with(client)
+	assert "0003_entites_extraites" in result.output
+	assert "0004_ops_pipeline_runs" in result.output
+
+
+def test_migrate_command_reports_no_pending_migrations(monkeypatch):
+	monkeypatch.setattr(cli.bigquery, "Client", Mock())
+	monkeypatch.setattr(cli, "apply_migrations", Mock(return_value=[]))
+
+	result = runner.invoke(
+		cli.app, ["migrate", "--project-id", "test-project", "--location", "EU"]
+	)
+
+	assert result.exit_code == 0, result.output
+	assert "Aucune migration en attente." in result.output
+
+
+def test_migrate_command_propagates_migration_failure(monkeypatch):
+	monkeypatch.setattr(cli.bigquery, "Client", Mock())
+	monkeypatch.setattr(
+		cli, "apply_migrations", Mock(side_effect=RuntimeError("migration échouée"))
+	)
+
+	result = runner.invoke(cli.app, ["migrate", "--project-id", "test-project"])
+
+	assert result.exit_code != 0
+	assert isinstance(result.exception, RuntimeError)
+	assert str(result.exception) == "migration échouée"
+
+
+def test_extract_entities_dry_run_does_not_create_llm(monkeypatch):
+	from decimal import Decimal
+
+	from vil_pipeline.jobs.extract_entities import ExtractionStats
+
+	bq = Mock()
+	monkeypatch.setattr(cli, "BigQueryClient", Mock(return_value=bq))
+	gemini = Mock()
+	monkeypatch.setattr(cli, "GeminiLLMClient", gemini)
+	extract = Mock(
+		return_value=ExtractionStats(
+			run_id="test", read=2, estimated_cost=Decimal("0.2"), dry_run=True
+		)
+	)
+	monkeypatch.setattr(cli, "extract_entities", extract)
+	result = runner.invoke(cli.app, [
+		"extract-entities", "--project-id", "test-project", "--max-cost", "1",
+		"--cost-per-call", "0.1", "--dry-run",
+	])
+	assert result.exit_code == 0, result.output
+	gemini.assert_not_called()
+	assert extract.call_args.args == (bq, None)
+	assert extract.call_args.kwargs["dry_run"] is True
+	assert "coût estimé 0.2" in result.output
+
+
+def test_extract_entities_uses_model_client_and_closes_it(monkeypatch):
+	from vil_pipeline.jobs.extract_entities import ExtractionStats
+
+	monkeypatch.setenv("LLM_API_KEY", "test-secret")
+	monkeypatch.setattr(cli, "BigQueryClient", Mock())
+	client = Mock()
+	context = Mock()
+	context.__enter__ = Mock(return_value=client)
+	context.__exit__ = Mock(return_value=False)
+	gemini = Mock(return_value=context)
+	monkeypatch.setattr(cli, "GeminiLLMClient", gemini)
+	extract = Mock(return_value=ExtractionStats(run_id="test"))
+	monkeypatch.setattr(cli, "extract_entities", extract)
+	result = runner.invoke(cli.app, [
+		"extract-entities", "--project-id", "test-project", "--max-cost", "1",
+		"--cost-per-call", "0.1", "--model", "custom-model",
+	])
+	assert result.exit_code == 0, result.output
+	assert gemini.call_args.kwargs["model"] == "custom-model"
+	assert extract.call_args.args[1] is client
+	context.__exit__.assert_called_once()
+	assert "test-secret" not in result.output
+
+
+def test_evaluate_extraction_command_passes_options(tmp_path, monkeypatch):
+	client = Mock()
+	monkeypatch.setattr(cli, "BigQueryClient", Mock(return_value=client))
+	report = tmp_path / "report.md"
+	evaluate = Mock(return_value=report)
+	monkeypatch.setattr(cli, "evaluate_extraction", evaluate)
+	result = runner.invoke(cli.app, [
+		"evaluate-extraction", "--project-id", "test-project", "--location", "EU",
+		"--model", "test-model", "--version-prompt", "prompt-hash",
+		"--golden", str(tmp_path / "golden.csv"),
+		"--titles", str(tmp_path / "titres.csv"), "--output", str(report),
+	])
+	assert result.exit_code == 0, result.output
+	assert evaluate.call_args.args == (client,)
+	assert evaluate.call_args.kwargs == {
+		"model": "test-model", "version_prompt": "prompt-hash",
+		"golden_path": tmp_path / "golden.csv",
+		"titles_path": tmp_path / "titres.csv", "output_path": report,
+	}
+	assert str(report) in result.output
+
+
+def test_export_review_command_passes_options(tmp_path, monkeypatch):
+	client = Mock()
+	monkeypatch.setattr(cli, "BigQueryClient", Mock(return_value=client))
+	export = Mock(return_value=2)
+	monkeypatch.setattr(cli, "export_review", export)
+	output = tmp_path / "review.csv"
+	result = runner.invoke(cli.app, [
+		"export-review", "--project-id", "test-project", "--location", "EU",
+		"--output", str(output), "--threshold", "0.8",
+	])
+	assert result.exit_code == 0, result.output
+	export.assert_called_once_with(client, output, threshold=0.8)
+	assert "Entités exportées : 2" in result.output
+
+
+def test_import_review_command_passes_options(tmp_path, monkeypatch):
+	client = Mock()
+	monkeypatch.setattr(cli, "BigQueryClient", Mock(return_value=client))
+	importer = Mock(return_value=1)
+	monkeypatch.setattr(cli, "import_review", importer)
+	source = tmp_path / "review.csv"
+	source.touch()
+	result = runner.invoke(cli.app, [
+		"import-review", "--project-id", "test-project", "--input", str(source),
+	])
+	assert result.exit_code == 0, result.output
+	importer.assert_called_once_with(client, source)
+	assert "Décisions importées : 1" in result.output
+
+
+def test_iter_corpus_reads_xml_members_from_tar_archive(tmp_path):
+	archive_path = tmp_path / "legi.tar.gz"
+	with tarfile.open(archive_path, "w:gz") as archive:
+		archive.add(FIXTURES_DIR / "article_vigueur.xml", arcname="article.xml")
+
+	result = list(iter_corpus(archive_path, livre="II"))
+
+	assert len(result) == 1
+	assert result[0][0].article_id == "LEGIARTI000006901674"
