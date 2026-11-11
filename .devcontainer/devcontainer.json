@@ -32,6 +32,10 @@
   },
   // Port de développement de l'application web.
   "forwardPorts": [3000],
+  // Rend les commandes du virtualenv accessibles directement dans les terminaux.
+  "remoteEnv": {
+    "PATH": "${containerWorkspaceFolder}/pipeline/.venv/bin:${containerEnv:PATH}"
+  },
   // Installation de Stripe CLI, uv et pre-commit après la création du conteneur.
-  "postCreateCommand": "npm install -g @stripe/cli && curl -LsSf https://astral.sh/uv/install.sh | sh && \"$HOME/.local/bin/uv\" tool install pre-commit && \"$HOME/.local/bin/pre-commit\" install"
+  "postCreateCommand": "npm install -g @stripe/cli && curl -LsSf https://astral.sh/uv/install.sh | sh && \"$HOME/.local/bin/uv\" sync --project pipeline --extra dev && \"$HOME/.local/bin/uv\" tool install pre-commit && \"$HOME/.local/bin/pre-commit\" install"
 }
