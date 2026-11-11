@@ -1,0 +1,1 @@
+Ce dossier documente le graphe de connaissances du projet.

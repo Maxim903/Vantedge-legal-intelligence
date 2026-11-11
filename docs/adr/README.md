@@ -1,0 +1,1 @@
+Ce dossier contient les décisions d’architecture enregistrées.

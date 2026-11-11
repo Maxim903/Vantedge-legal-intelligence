@@ -1,0 +1,1 @@
+Ce dossier contient les spécifications du projet.

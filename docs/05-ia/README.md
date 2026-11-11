@@ -1,0 +1,1 @@
+Ce dossier documente les composants d’intelligence artificielle du projet.
