@@ -32,6 +32,6 @@
   },
   // Port de développement de l'application web.
   "forwardPorts": [3000],
-  // Installation de uv et pre-commit après la création du conteneur.
-  "postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && \"$HOME/.local/bin/uv\" tool install pre-commit && \"$HOME/.local/bin/pre-commit\" install"
+  // Installation de Stripe CLI, uv et pre-commit après la création du conteneur.
+  "postCreateCommand": "npm install -g @stripe/cli && curl -LsSf https://astral.sh/uv/install.sh | sh && \"$HOME/.local/bin/uv\" tool install pre-commit && \"$HOME/.local/bin/pre-commit\" install"
 }
