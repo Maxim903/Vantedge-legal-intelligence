@@ -1,0 +1,1 @@
+Ce dossier décrit l’architecture du projet.
