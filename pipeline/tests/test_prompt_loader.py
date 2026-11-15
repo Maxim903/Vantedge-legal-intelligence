@@ -8,6 +8,7 @@ import pytest
 
 from prompts.loader import load_prompt
 from vil_pipeline.extraction.validate import validate_extraction
+from vil_pipeline.models.extraction import ResultatExtraction
 
 
 def test_load_prompt_returns_text_and_sha256_version():
@@ -32,6 +33,28 @@ def test_extraction_prompt_includes_schema_fields_and_two_examples():
 	):
 		assert f'"{field}"' in text
 	assert text.count("### Exemple ") == 2
+
+
+def test_v1_format_and_examples_validate_against_extraction_model():
+	text, _ = load_prompt()
+	format_section = re.search(
+		r"## Format de sortie.*?```json\n(.*?)\n```", text, flags=re.DOTALL
+	)
+	assert format_section is not None
+	ResultatExtraction.model_validate_json(format_section.group(1))
+
+	examples = re.split(r"^### Exemple \d+\s*$", text, flags=re.MULTILINE)[1:]
+	assert len(examples) == 2
+	for example in examples:
+		article_match = re.search(
+			r"Article :\s*> (.*?)\s*Sortie :", example, flags=re.DOTALL
+		)
+		json_match = re.search(r"```json\n(.*?)\n```", example, flags=re.DOTALL)
+		assert article_match is not None
+		assert json_match is not None
+		article = " ".join(article_match.group(1).split())
+		result = ResultatExtraction.model_validate_json(json_match.group(1))
+		assert all(notion.citation_article in article for notion in result.notions)
 
 
 def test_prompt_version_changes_with_content(tmp_path, monkeypatch):

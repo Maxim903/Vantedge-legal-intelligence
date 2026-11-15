@@ -1,12 +1,16 @@
 """Tests for the pipeline command-line interface."""
 
 import tarfile
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock
 
 from typer.testing import CliRunner
 
 import vil_pipeline.cli as cli
+from vil_pipeline.jobs.collect_intent import IntentCollectionStats
+from vil_pipeline.jobs.collect_serp import SerpCollectionStats
+from vil_pipeline.jobs.collect_volumes import VolumeCollectionStats
 from vil_pipeline.jobs.load_corpus import LoadStats, iter_corpus
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "legi"
@@ -154,6 +158,108 @@ def test_extract_entities_uses_model_client_and_closes_it(monkeypatch):
 	assert extract.call_args.args[1] is client
 	context.__exit__.assert_called_once()
 	assert "test-secret" not in result.output
+
+
+def test_collect_volumes_dry_run_reports_calls_and_estimated_cost(monkeypatch):
+	monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+	monkeypatch.setenv("GCS_BUCKET_RAW", "raw-bucket")
+	bq = Mock()
+	gcs = Mock()
+	monkeypatch.setattr(cli, "BigQueryClient", Mock(return_value=bq))
+	monkeypatch.setattr(cli, "GCSClient", Mock(return_value=gcs))
+	provider = Mock()
+	monkeypatch.setattr(cli, "DataForSEOClient", provider)
+	stats = VolumeCollectionStats(
+		run_id="run-1",
+		status="DRY_RUN",
+		read=3,
+		cached=1,
+		calls=2,
+		estimated_cost=Decimal("0.15"),
+		actual_cost=Decimal("0"),
+	)
+	collect = Mock(return_value=stats)
+	monkeypatch.setattr(cli, "collect_volumes", collect)
+
+	result = runner.invoke(cli.app, [
+		"collect-volumes", "--max-cost", "1", "--cost-per-call", "0.075",
+		"--dry-run",
+	])
+
+	assert result.exit_code == 0, result.output
+	collect.assert_called_once_with(
+		bq,
+		gcs,
+		None,
+		max_cost=Decimal("1"),
+		cost_per_call=Decimal("0.075"),
+		dry_run=True,
+	)
+	provider.assert_not_called()
+	assert "appels 2" in result.output
+	assert "coût estimé 0.15 USD" in result.output
+
+
+def test_collect_serp_dry_run_passes_top_n_and_reports_estimate(monkeypatch):
+	monkeypatch.setenv("GCS_BUCKET_RAW", "raw-bucket")
+	bq, gcs, provider = Mock(), Mock(), Mock()
+	monkeypatch.setattr(cli, "BigQueryClient", Mock(return_value=bq))
+	monkeypatch.setattr(cli, "GCSClient", Mock(return_value=gcs))
+	monkeypatch.setattr(cli, "DataForSEOClient", provider)
+	stats = SerpCollectionStats(
+		run_id="run-1", status="DRY_RUN", ranked=40, selected=10, cached=3,
+		calls=7, estimated_cost=Decimal("0.021"), actual_cost=Decimal("0"),
+	)
+	collect = Mock(return_value=stats)
+	monkeypatch.setattr(cli, "collect_serp", collect)
+
+	result = runner.invoke(cli.app, [
+		"collect-serp", "--top-n", "10", "--max-cost", "1",
+		"--cost-per-call", "0.003", "--project-id", "test-project", "--dry-run",
+	])
+
+	assert result.exit_code == 0, result.output
+	collect.assert_called_once_with(
+		bq, gcs, None, top_n=10, max_cost=Decimal("1"),
+		cost_per_call=Decimal("0.003"), dry_run=True,
+	)
+	provider.assert_not_called()
+	assert "appels 7" in result.output
+	assert "coût estimé 0.021 USD" in result.output
+
+
+def test_collect_serp_requires_a_positive_top_n():
+	result = runner.invoke(cli.app, [
+		"collect-serp", "--top-n", "0", "--max-cost", "1",
+		"--cost-per-call", "0.003", "--project-id", "test-project",
+	])
+
+	assert result.exit_code != 0
+
+
+def test_collect_intent_command_passes_options_and_reports_summary(monkeypatch):
+	bq = Mock()
+	monkeypatch.setattr(cli, "BigQueryClient", Mock(return_value=bq))
+	stats = IntentCollectionStats(
+		run_id="run-intent",
+		status="SUCCESS",
+		read=10,
+		classified=10,
+		distribution={"informationnelle": 7, "transactionnelle": 3},
+	)
+	collect = Mock(return_value=stats)
+	monkeypatch.setattr(cli, "collect_intent", collect)
+
+	result = runner.invoke(cli.app, [
+		"collect-intent", "--project-id", "test-project", "--location", "EU",
+		"--dry-run",
+	])
+
+	assert result.exit_code == 0, result.output
+	collect.assert_called_once_with(bq, dry_run=True)
+	assert "requêtes 10" in result.output
+	assert "classées 10" in result.output
+	assert "informationnelle" in result.output
 
 
 def test_evaluate_extraction_command_passes_options(tmp_path, monkeypatch):

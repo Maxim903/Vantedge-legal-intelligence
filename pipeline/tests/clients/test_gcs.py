@@ -34,6 +34,22 @@ def test_upload_json_immutable_creates_blob_with_generation_precondition(gcs_cli
 	)
 
 
+def test_upload_json_immutable_sets_blob_metadata(gcs_client):
+	wrapper, _, bucket = gcs_client
+	blob = Mock()
+	bucket.blob.return_value = blob
+	metadata = {"date": "2026-11-15", "endpoint": "volumes", "cost": "0.075"}
+
+	wrapper.upload_json_immutable(
+		"dataforseo/volumes/2026/11/15/key.json",
+		{"status_code": 20000},
+		metadata=metadata,
+	)
+
+	assert blob.metadata == metadata
+	blob.upload_from_string.assert_called_once()
+
+
 def test_upload_json_immutable_propagates_existing_object_error(gcs_client):
 	wrapper, _, bucket = gcs_client
 	blob = Mock()
@@ -56,6 +72,21 @@ def test_exists_returns_blob_existence(gcs_client, found):
 
 	bucket.blob.assert_called_once_with("articles/one.json")
 	blob.exists.assert_called_once_with()
+
+
+def test_list_blob_names_uses_bucket_prefix(gcs_client):
+	wrapper, _, bucket = gcs_client
+	first = Mock()
+	first.name = "dataforseo/volumes/a.json"
+	second = Mock()
+	second.name = "dataforseo/volumes/b.json"
+	bucket.list_blobs.return_value = [first, second]
+
+	assert wrapper.list_blob_names("dataforseo/volumes/") == [
+		"dataforseo/volumes/a.json",
+		"dataforseo/volumes/b.json",
+	]
+	bucket.list_blobs.assert_called_once_with(prefix="dataforseo/volumes/")
 
 
 def test_download_json_decodes_blob_content(gcs_client):

@@ -6,6 +6,11 @@ from typing import Any
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DATAFORSEO_TTL_JOURS: dict[str, int] = {
+	"keywords_data/google_ads/search_volume/live": 30,
+	"serp/google/organic/live/regular": 30,
+}
+
 
 class Settings(BaseSettings):
 	model_config = SettingsConfigDict(

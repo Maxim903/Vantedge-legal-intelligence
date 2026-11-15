@@ -21,7 +21,8 @@ Pour chaque notion :
   directement décrites par l'article ; utilise une liste vide si aucune ne
   peut être établie sans extrapolation ;
 - `confiance` : nombre entre 0 et 1 reflétant le degré d'appui textuel ;
-- `citation_article` : extrait exact et court qui justifie la notion.
+- `citation_article` : extrait exact et court (500 caractères maximum) qui
+  justifie la notion.
 
 Si aucune notion ne peut être extraite, renvoie une liste `notions` vide.
 N'inclus aucun commentaire avant ou après le JSON.
@@ -32,7 +33,7 @@ Renvoie un unique objet JSON conforme à ce schéma :
 
 ```json
 {
-  "article_version_id": "LEGIARTI suivi de 12 chiffres",
+  "article_version_id": "LEGIARTI000000000000",
   "notions": [
     {
       "libelle": "string non vide",

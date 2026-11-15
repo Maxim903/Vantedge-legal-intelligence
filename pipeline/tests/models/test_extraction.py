@@ -24,6 +24,17 @@ def test_notion_extraite_accepts_valid_data():
 	assert notion.situations_de_vie == ["Prendre ses congés"]
 
 
+def test_notion_extraite_accepts_citation_at_maximum_length():
+	notion = NotionExtraite(**{**VALID_NOTION, "citation_article": "x" * 500})
+
+	assert len(notion.citation_article) == 500
+
+
+def test_notion_extraite_rejects_citation_over_maximum_length():
+	with pytest.raises(ValidationError):
+		NotionExtraite(**{**VALID_NOTION, "citation_article": "x" * 501})
+
+
 @pytest.mark.parametrize("confiance", [-0.01, 1.01])
 def test_notion_extraite_rejects_confidence_outside_zero_to_one(confiance):
 	with pytest.raises(ValidationError):

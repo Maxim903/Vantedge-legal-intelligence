@@ -27,6 +27,7 @@
           "type": "number"
         },
         "citation_article": {
+          "maxLength": 500,
           "minLength": 1,
           "title": "Citation Article",
           "type": "string"

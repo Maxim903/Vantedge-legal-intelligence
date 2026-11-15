@@ -155,6 +155,22 @@ def test_extraction_and_pipeline_runs_migration_columns():
 	):
 		assert column in runs
 	assert "PARTITION BY DATE(debut)" in runs
+	costs = (migrations_dir / "0006_ops_couts_api.sql").read_text(
+		encoding="utf-8"
+	)
+	assert "CREATE TABLE IF NOT EXISTS `ops.couts_api`" in costs
+	for column in (
+		"cout_id STRING NOT NULL",
+		"lot_id STRING NOT NULL",
+		"fournisseur STRING NOT NULL",
+		"service STRING NOT NULL",
+		"date_cout DATE NOT NULL",
+		"montant NUMERIC NOT NULL",
+		"devise STRING NOT NULL",
+		"details JSON",
+	):
+		assert column in costs
+	assert "PARTITION BY date_cout" in costs
 
 
 def test_default_migrations_apply_and_record_new_files_in_order():
@@ -162,16 +178,22 @@ def test_default_migrations_apply_and_record_new_files_in_order():
 	recorded = [
 		{"migration_id": path.stem}
 		for path in sorted(migrations_dir.glob("*.sql"))
-		if path.stem not in {"0003_entites_extraites", "0004_ops_pipeline_runs"}
+		if path.stem not in {
+			"0003_entites_extraites",
+			"0004_ops_pipeline_runs",
+			"0006_ops_couts_api",
+		}
 	]
-	client = _client_with_results([], [], [], recorded, [], [], [], [])
+	client = _client_with_results([], [], [], recorded, [], [], [], [], [], [])
 
 	assert apply_migrations(client) == [
 		"0003_entites_extraites",
 		"0004_ops_pipeline_runs",
+		"0006_ops_couts_api",
 	]
 	assert "`raw.entites_extraites`" in client.query.call_args_list[4].args[0]
 	assert "`ops.pipeline_runs`" in client.query.call_args_list[6].args[0]
+	assert "`ops.couts_api`" in client.query.call_args_list[8].args[0]
 
 
 @pytest.mark.parametrize(

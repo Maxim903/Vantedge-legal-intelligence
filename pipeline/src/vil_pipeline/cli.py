@@ -1,5 +1,6 @@
 """Pipeline command-line interface."""
 
+import os
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from time import perf_counter
@@ -11,7 +12,18 @@ from pydantic import SecretStr
 from prompts.loader import load_prompt
 from vil_pipeline.apply_migrations import apply_migrations
 from vil_pipeline.clients.bigquery import BigQueryClient
+from vil_pipeline.clients.dataforseo import DataForSEOClient
+from vil_pipeline.clients.gcs import GCSClient
 from vil_pipeline.clients.llm_gemini import GeminiLLMClient
+from vil_pipeline.jobs.collect_intent import (
+	IntentCollectionStats,
+	collect_intent,
+)
+from vil_pipeline.jobs.collect_serp import SerpCollectionStats, collect_serp
+from vil_pipeline.jobs.collect_volumes import (
+	VolumeCollectionStats,
+	collect_volumes,
+)
 from vil_pipeline.jobs.evaluate_extraction import (
 	DEFAULT_GOLDEN,
 	DEFAULT_TITLES,
@@ -118,6 +130,128 @@ def extract_entities_command(
 		f"Extraction : statut {stats.status}, lus {stats.read}, "
 		f"traités {stats.processed}, quarantaine {stats.quarantined}, "
 		f"appels {stats.calls}, coût estimé {stats.estimated_cost}."
+	)
+
+
+@app.command("collect-volumes")
+def collect_volumes_command(
+	max_cost: str = typer.Option(..., "--max-cost", help="Budget maximal estimé."),
+	cost_per_call: str = typer.Option(
+		..., "--cost-per-call", help="Coût estimé par mot-clé DataForSEO."
+	),
+	project_id: str = typer.Option(..., "--project-id", envvar="GCP_PROJECT_ID"),
+	location: str | None = typer.Option(None, "--location", envvar="BQ_LOCATION"),
+	dry_run: bool = typer.Option(False, "--dry-run"),
+) -> None:
+	"""Collecte les volumes des requêtes candidates non archivées récemment."""
+	try:
+		budget = Decimal(max_cost)
+		unit_cost = Decimal(cost_per_call)
+	except InvalidOperation as error:
+		raise typer.BadParameter(
+			"Les coûts doivent être des nombres décimaux."
+		) from error
+
+	bucket = os.environ.get("GCS_BUCKET_RAW")
+	if not bucket:
+		raise typer.BadParameter("GCS_BUCKET_RAW est nécessaire.")
+	bq = BigQueryClient(project_id, location)
+	gcs = GCSClient(bucket)
+	if dry_run:
+		stats = collect_volumes(
+			bq, gcs, None, max_cost=budget,
+			cost_per_call=unit_cost, dry_run=True,
+		)
+	else:
+		login = os.environ.get("DATAFORSEO_LOGIN")
+		password = os.environ.get("DATAFORSEO_PASSWORD")
+		if not login or not password:
+			raise typer.BadParameter(
+				"DATAFORSEO_LOGIN et DATAFORSEO_PASSWORD sont nécessaires hors dry-run."
+			)
+		with DataForSEOClient(login, password) as provider:
+			stats = collect_volumes(
+				bq, gcs, provider, max_cost=budget,
+				cost_per_call=unit_cost,
+			)
+	if not isinstance(stats, VolumeCollectionStats):
+		raise RuntimeError("Résultat inattendu du job collect_volumes")
+	typer.echo(
+		f"Volumes : statut {stats.status}, requêtes {stats.read}, "
+		f"cache frais {stats.cached}, appels {stats.calls}, "
+		f"coût estimé {stats.estimated_cost} USD, "
+		f"coût réel {stats.actual_cost} USD."
+	)
+
+
+@app.command("collect-serp")
+def collect_serp_command(
+	top_n: int = typer.Option(
+		..., "--top-n", min=1, help="Nombre de requêtes de plus fort volume."
+	),
+	max_cost: str = typer.Option(..., "--max-cost", help="Budget maximal estimé."),
+	cost_per_call: str = typer.Option(
+		..., "--cost-per-call", help="Coût estimé par SERP DataForSEO."
+	),
+	project_id: str = typer.Option(..., "--project-id", envvar="GCP_PROJECT_ID"),
+	location: str | None = typer.Option(None, "--location", envvar="BQ_LOCATION"),
+	dry_run: bool = typer.Option(False, "--dry-run"),
+) -> None:
+	"""Collecte le top 10 des résultats pour les requêtes de plus fort volume."""
+	try:
+		budget = Decimal(max_cost)
+		unit_cost = Decimal(cost_per_call)
+	except InvalidOperation as error:
+		raise typer.BadParameter(
+			"Les coûts doivent être des nombres décimaux."
+		) from error
+
+	bucket = os.environ.get("GCS_BUCKET_RAW")
+	if not bucket:
+		raise typer.BadParameter("GCS_BUCKET_RAW est nécessaire.")
+	bq = BigQueryClient(project_id, location)
+	gcs = GCSClient(bucket)
+	if dry_run:
+		stats = collect_serp(
+			bq, gcs, None, top_n=top_n, max_cost=budget,
+			cost_per_call=unit_cost, dry_run=True,
+		)
+	else:
+		login = os.environ.get("DATAFORSEO_LOGIN")
+		password = os.environ.get("DATAFORSEO_PASSWORD")
+		if not login or not password:
+			raise typer.BadParameter(
+				"DATAFORSEO_LOGIN et DATAFORSEO_PASSWORD sont nécessaires hors dry-run."
+			)
+		with DataForSEOClient(login, password) as provider:
+			stats = collect_serp(
+				bq, gcs, provider, top_n=top_n, max_cost=budget,
+				cost_per_call=unit_cost,
+			)
+	if not isinstance(stats, SerpCollectionStats):
+		raise RuntimeError("Résultat inattendu du job collect_serp")
+	typer.echo(
+		f"SERP : statut {stats.status}, requêtes classées {stats.ranked}, "
+		f"sélectionnées {stats.selected}, cache frais {stats.cached}, "
+		f"appels {stats.calls}, coût estimé {stats.estimated_cost} USD, "
+		f"coût réel {stats.actual_cost} USD."
+	)
+
+
+@app.command("collect-intent")
+def collect_intent_command(
+	project_id: str = typer.Option(..., "--project-id", envvar="GCP_PROJECT_ID"),
+	location: str | None = typer.Option(None, "--location", envvar="BQ_LOCATION"),
+	dry_run: bool = typer.Option(False, "--dry-run"),
+) -> None:
+	"""Classifie l'intention dominante des requêtes candidates."""
+	bq = BigQueryClient(project_id, location)
+	stats = collect_intent(bq, dry_run=dry_run)
+	if not isinstance(stats, IntentCollectionStats):
+		raise RuntimeError("Résultat inattendu du job collect_intent")
+	typer.echo(
+		f"Intentions : statut {stats.status}, requêtes {stats.read}, "
+		f"classées {stats.classified}, répartition {stats.distribution}."
 	)
 
 

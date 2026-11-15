@@ -14,7 +14,7 @@ class NotionExtraite(BaseModel):
 	definition_courte: str = Field(min_length=1)
 	situations_de_vie: list[str]
 	confiance: Annotated[float, Field(ge=0, le=1)]
-	citation_article: str = Field(min_length=1)
+	citation_article: str = Field(min_length=1, max_length=500)
 
 
 class ResultatExtraction(BaseModel):
