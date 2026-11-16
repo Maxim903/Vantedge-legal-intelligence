@@ -74,6 +74,9 @@ def test_parse_legi_article_uses_effective_historical_chapter():
 	article, _ = parse_legi_article(FIXTURES_DIR / "article_abroge.xml")
 
 	assert article.chapitre == "Chapitre III : Les instruments"
+	assert article.chapitre_id == "LEGISCTA000006152227"
+	assert article.titre_id == "LEGISCTA000006138327"
+	assert article.livre_id == "LEGISCTA000006121420"
 
 
 def test_parse_legi_article_reports_invalid_xml_with_file_path(tmp_path: Path):

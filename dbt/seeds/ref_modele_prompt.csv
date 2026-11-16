@@ -1,0 +1,3 @@
+modele_prompt_id,modele_llm,version_modele,version_prompt,prompt_hash,date_debut,date_fin
+gemini-2.5-flash__extraction_v1,gemini-2.5-flash,gemini-2.5-flash,extraction_v1,a61abddcae219bb527a9baac8b641cfdf55d5d5b6dfa0d8f08c4b49b25267ebd,2026-11-11,
+gemini-2.5-flash__extraction_v2,gemini-2.5-flash,gemini-2.5-flash,extraction_v2,1561b97a90523155f4bafb41f1b6ee3484b6c0831b5930ec197018747b3e5dc8,2026-11-11,

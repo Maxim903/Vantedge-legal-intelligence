@@ -114,6 +114,9 @@ def test_load_uses_temporary_table_and_merges_with_dml_counts(tmp_path):
 	assert len(loaded_rows) == 1
 	assert loaded_rows[0]["article_version_id"] == "LEGIARTI000006901674"
 	assert loaded_rows[0]["texte"]
+	assert loaded_rows[0]["code_id"] == DEFAULT_CODE_ID
+	assert loaded_rows[0]["chapitre_id"].startswith("LEGISCTA")
+	assert loaded_rows[0]["livre"]
 	assert client.insert.call_args.args[0].startswith(
 		"test-project.raw._tmp_corpus_",
 	)

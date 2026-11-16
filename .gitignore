@@ -18,6 +18,7 @@ pnpm-debug.log*
 target/
 dbt_packages/
 logs/
+dbt/.user.yml
 
 # Local environment and credentials
 .env

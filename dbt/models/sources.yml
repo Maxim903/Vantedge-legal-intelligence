@@ -1,0 +1,63 @@
+version: 2
+
+sources:
+  - name: raw
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: raw
+    tables:
+      - name: articles
+        description: >
+          Articles juridiques du corpus, avec leur code, livre, titre et
+          chapitre (identifiants LEGISCTA et libellés).
+        columns:
+          - name: article_id
+            data_tests: [not_null]
+      - name: article_versions
+        description: Versions temporelles des articles juridiques.
+        columns:
+          - name: article_version_id
+            data_tests: [not_null, unique]
+          - name: article_id
+            data_tests: [not_null]
+      - name: entites_extraites
+        description: Notions extraites par le LLM et leur validation.
+        columns:
+          - name: extraction_id
+            data_tests: [not_null, unique]
+          - name: article_version_id
+            data_tests: [not_null]
+      - name: requetes_candidates
+        description: Requêtes web candidates issues des notions.
+      - name: requetes_intentions
+        description: Intention dominante de chaque requête candidate.
+      - name: dataforseo_volumes
+        description: Volumes Google Ads DataForSEO chargés depuis les archives GCS.
+        columns:
+          - name: archive_blob
+            data_tests: [not_null]
+          - name: mot_cle
+            data_tests: [not_null]
+      - name: dataforseo_serp
+        description: Résultats SERP DataForSEO chargés depuis les archives GCS.
+        columns:
+          - name: archive_blob
+            data_tests: [not_null]
+          - name: mot_cle
+            data_tests: [not_null]
+      - name: dataforseo_intent
+        description: Intentions DataForSEO chargées depuis les archives GCS.
+        columns:
+          - name: archive_blob
+            data_tests: [not_null]
+          - name: mot_cle
+            data_tests: [not_null]
+
+  - name: ops
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: ops
+    tables:
+      - name: couts_api
+        description: Coûts réels des appels API par lot.
+        columns:
+          - name: cout_id
+            data_tests: [not_null, unique]

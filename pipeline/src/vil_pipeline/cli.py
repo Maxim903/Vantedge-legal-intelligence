@@ -31,6 +31,7 @@ from vil_pipeline.jobs.evaluate_extraction import (
 )
 from vil_pipeline.jobs.extract_entities import extract_entities
 from vil_pipeline.jobs.load_corpus import load_corpus
+from vil_pipeline.jobs.load_raw_market import load_raw_market
 from vil_pipeline.jobs.review_queue import export_review, import_review
 
 app = typer.Typer(help="Outils du pipeline Vantedge Legal Intelligence.")
@@ -252,6 +253,26 @@ def collect_intent_command(
 	typer.echo(
 		f"Intentions : statut {stats.status}, requêtes {stats.read}, "
 		f"classées {stats.classified}, répartition {stats.distribution}."
+	)
+
+
+@app.command("load-raw-market")
+def load_raw_market_command(
+	project_id: str = typer.Option(..., "--project-id", envvar="GCP_PROJECT_ID"),
+	location: str | None = typer.Option(None, "--location", envvar="BQ_LOCATION"),
+	dry_run: bool = typer.Option(False, "--dry-run"),
+) -> None:
+	"""Charge dans raw les archives DataForSEO pas encore chargées."""
+	bucket = os.environ.get("GCS_BUCKET_RAW")
+	if not bucket:
+		raise typer.BadParameter("GCS_BUCKET_RAW est nécessaire.")
+	stats = load_raw_market(
+		BigQueryClient(project_id, location), GCSClient(bucket), dry_run=dry_run
+	)
+	typer.echo(
+		f"Marché raw : statut {stats.status}, archives trouvées "
+		f"{stats.archives_found}, chargées {stats.archives_loaded}, "
+		f"lignes {stats.rows_loaded}."
 	)
 
 

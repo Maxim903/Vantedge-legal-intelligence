@@ -17,6 +17,9 @@ class Article(BaseModel):
 	livre: str
 	titre: str
 	chapitre: str
+	livre_id: str | None = None
+	titre_id: str | None = None
+	chapitre_id: str | None = None
 
 
 class ArticleVersion(BaseModel):

@@ -1,0 +1,83 @@
+version: 2
+
+seeds:
+  - name: codes
+    description: Libellés des codes juridiques par identifiant Légifrance.
+    config:
+      column_types:
+        legifrance_id: string
+        libelle: string
+        ordre: int64
+    columns:
+      - name: legifrance_id
+        data_tests: [not_null, unique]
+
+  - name: pays_langue
+    description: Combinaisons pays/langue connues (MVP, France et français).
+    config:
+      column_types:
+        pays: string
+        langue: string
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [pays, langue]
+
+  - name: ref_taxonomie_intention
+    description: >
+      Taxonomie des intentions de recherche par version. regles_classification
+      contient du JSON stocké en STRING (les seeds ne chargent pas le type JSON).
+    config:
+      schema: marts
+      column_types:
+        version_taxonomie: string
+        type: string
+        definition: string
+        regles_classification: string
+        date_debut: date
+        date_fin: date
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [version_taxonomie, type]
+    columns:
+      - name: version_taxonomie
+        data_tests: [not_null]
+      - name: type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [informationnelle, transactionnelle, navigationnelle, commerciale]
+          - relationships:
+              arguments:
+                to: ref('dim_intention')
+                field: type
+      - name: date_debut
+        data_tests: [not_null]
+
+  - name: ref_modele_prompt
+    description: >
+      Registre des combinaisons modèle/prompt. prompt_hash est le SHA-256 du
+      fichier de prompt, valeur stockée dans version_prompt de raw.entites_extraites.
+    config:
+      schema: marts
+      column_types:
+        modele_prompt_id: string
+        modele_llm: string
+        version_modele: string
+        version_prompt: string
+        prompt_hash: string
+        date_debut: date
+        date_fin: date
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [modele_llm, version_modele, version_prompt]
+    columns:
+      - name: modele_prompt_id
+        data_tests: [not_null, unique]
+      - name: prompt_hash
+        data_tests: [not_null, unique]
+      - name: date_debut
+        data_tests: [not_null]

@@ -26,7 +26,13 @@ _STAGING_SCHEMA = [
 	bigquery.SchemaField("article_id", "STRING", mode="REQUIRED"),
 	bigquery.SchemaField("article_version_id", "STRING", mode="REQUIRED"),
 	bigquery.SchemaField("numero", "STRING"),
+	bigquery.SchemaField("code_id", "STRING"),
+	bigquery.SchemaField("livre_id", "STRING"),
+	bigquery.SchemaField("livre", "STRING"),
+	bigquery.SchemaField("titre_id", "STRING"),
+	bigquery.SchemaField("titre", "STRING"),
 	bigquery.SchemaField("chapitre_id", "STRING"),
+	bigquery.SchemaField("chapitre", "STRING"),
 	bigquery.SchemaField("date_debut", "DATE", mode="REQUIRED"),
 	bigquery.SchemaField("date_fin", "DATE"),
 	bigquery.SchemaField("etat", "STRING", mode="REQUIRED"),
@@ -36,7 +42,9 @@ _MERGE_ARTICLES_SQL = '''
 EXECUTE IMMEDIATE FORMAT("""
 MERGE `%s.raw.articles` AS target
 USING (
-  SELECT article_id, numero, chapitre_id
+  SELECT
+    article_id, numero, code_id, livre_id, livre,
+    titre_id, titre, chapitre_id, chapitre
   FROM `%s`
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY article_id ORDER BY article_version_id DESC
@@ -45,11 +53,32 @@ USING (
 ON target.article_id = source.article_id
 WHEN MATCHED AND (
   target.numero IS DISTINCT FROM source.numero
+  OR target.code_id IS DISTINCT FROM source.code_id
+  OR target.livre_id IS DISTINCT FROM source.livre_id
+  OR target.livre IS DISTINCT FROM source.livre
+  OR target.titre_id IS DISTINCT FROM source.titre_id
+  OR target.titre IS DISTINCT FROM source.titre
+  OR target.chapitre_id IS DISTINCT FROM source.chapitre_id
+  OR target.chapitre IS DISTINCT FROM source.chapitre
 ) THEN UPDATE SET
-  numero = source.numero
+  numero = source.numero,
+  code_id = source.code_id,
+  livre_id = source.livre_id,
+  livre = source.livre,
+  titre_id = source.titre_id,
+  titre = source.titre,
+  chapitre_id = source.chapitre_id,
+  chapitre = source.chapitre
 WHEN NOT MATCHED THEN
-  INSERT (article_id, chapitre_id, numero)
-  VALUES (source.article_id, source.chapitre_id, source.numero)
+  INSERT (
+    article_id, numero, code_id, livre_id, livre,
+    titre_id, titre, chapitre_id, chapitre
+  )
+  VALUES (
+    source.article_id, source.numero, source.code_id, source.livre_id,
+    source.livre, source.titre_id, source.titre, source.chapitre_id,
+    source.chapitre
+  )
 """, @project_id, @staging_table)
 '''
 _MERGE_VERSIONS_SQL = '''
@@ -215,7 +244,13 @@ def load_corpus(
 				"article_id": article.article_id,
 				"article_version_id": version.article_version_id,
 				"numero": article.numero,
-				"chapitre_id": None,
+				"code_id": article.code_id,
+				"livre_id": article.livre_id,
+				"livre": article.livre,
+				"titre_id": article.titre_id,
+				"titre": article.titre,
+				"chapitre_id": article.chapitre_id,
+				"chapitre": article.chapitre,
 				"date_debut": version.date_debut.isoformat(),
 				"date_fin": (
 					version.date_fin.isoformat()

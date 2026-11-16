@@ -323,3 +323,20 @@ def test_iter_corpus_reads_xml_members_from_tar_archive(tmp_path):
 
 	assert len(result) == 1
 	assert result[0][0].article_id == "LEGIARTI000006901674"
+
+
+def test_load_raw_market_reports_counts(monkeypatch):
+	monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+	monkeypatch.setenv("GCS_BUCKET_RAW", "raw-bucket")
+	bq, gcs = Mock(), Mock()
+	monkeypatch.setattr(cli, "BigQueryClient", Mock(return_value=bq))
+	monkeypatch.setattr(cli, "GCSClient", Mock(return_value=gcs))
+	stats = Mock(status="SUCCESS", archives_found=3, archives_loaded=3, rows_loaded=9)
+	load = Mock(return_value=stats)
+	monkeypatch.setattr(cli, "load_raw_market", load)
+
+	result = runner.invoke(cli.app, ["load-raw-market"])
+
+	assert result.exit_code == 0, result.output
+	load.assert_called_once_with(bq, gcs, dry_run=False)
+	assert "chargées 3" in result.output

@@ -41,7 +41,8 @@ web-test:
 
 dbt-run:
 	@if [ -f dbt/dbt_project.yml ]; then \
-		dbt run --project-dir dbt; \
+		uv run --project pipeline --extra dbt dbt deps --project-dir dbt --profiles-dir dbt \
+			&& uv run --project pipeline --extra dbt dbt run --project-dir dbt --profiles-dir dbt; \
 	else \
 		printf '%s\n' 'Skipping dbt: dbt/dbt_project.yml does not exist yet.'; \
 	fi

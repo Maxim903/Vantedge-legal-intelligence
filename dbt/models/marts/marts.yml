@@ -1,0 +1,478 @@
+version: 2
+
+models:
+  - name: dim_code
+    description: Codes juridiques. Grain, un code.
+    columns:
+      - name: code_id
+        data_tests: [not_null, unique]
+      - name: legifrance_id
+        data_tests: [not_null, unique]
+
+  - name: dim_livre
+    description: Livres d'un code. Grain, un livre.
+    columns:
+      - name: livre_id
+        data_tests: [not_null, unique]
+      - name: code_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_code')
+                field: code_id
+      - name: legifrance_id
+        data_tests: [not_null, unique]
+
+  - name: dim_titre
+    description: Titres d'un livre. Grain, un titre.
+    columns:
+      - name: titre_id
+        data_tests: [not_null, unique]
+      - name: livre_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_livre')
+                field: livre_id
+      - name: legifrance_id
+        data_tests: [not_null, unique]
+
+  - name: dim_chapitre
+    description: Chapitres d'un titre. Grain, un chapitre.
+    columns:
+      - name: chapitre_id
+        data_tests: [not_null, unique]
+      - name: titre_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_titre')
+                field: titre_id
+      - name: legifrance_id
+        data_tests: [not_null, unique]
+
+  - name: dim_article
+    description: Articles juridiques, indépendamment de leurs versions. Grain, un article.
+    columns:
+      - name: article_id
+        data_tests: [not_null, unique]
+      - name: chapitre_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_chapitre')
+                field: chapitre_id
+      - name: numero
+        data_tests: [not_null]
+
+  - name: dim_article_version
+    description: Versions temporelles d'un article. Grain, une version.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [article_id, date_debut]
+      - periodes_sans_chevauchement:
+          arguments:
+            key_column: article_version_id
+            partition_column: article_id
+            start_column: date_debut
+            end_column: date_fin
+    columns:
+      - name: article_version_id
+        data_tests: [not_null, unique]
+      - name: article_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_article')
+                field: article_id
+      - name: date_debut
+        data_tests: [not_null]
+      - name: etat
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [VIGUEUR, MODIFIE, ABROGE]
+
+  - name: dim_notion
+    description: >
+      Notions canoniques issues des extractions au statut VALIDE ou AUTO dont la
+      confiance dépasse la variable seuil_confiance. Grain, une notion.
+    columns:
+      - name: notion_id
+        data_tests: [not_null, unique]
+      - name: libelle
+        data_tests: [not_null]
+      - name: score_confiance
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+
+  - name: dim_situation_vie
+    description: Situations de vie des extractions retenues. Grain, une situation.
+    columns:
+      - name: situation_id
+        data_tests: [not_null, unique]
+      - name: libelle
+        data_tests: [not_null]
+
+  - name: pont_notion_situation
+    description: Rattachement d'une notion à une situation de vie.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [notion_id, situation_id]
+    columns:
+      - name: notion_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_notion')
+                field: notion_id
+      - name: situation_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_situation_vie')
+                field: situation_id
+
+  - name: dim_intention
+    description: Types d'intention de recherche. Grain, un type.
+    columns:
+      - name: type
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values: [informationnelle, transactionnelle, navigationnelle, commerciale]
+
+  - name: dim_pays_langue
+    description: Combinaisons pays/langue. Grain, une combinaison.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [pays, langue]
+    columns:
+      - name: pays_langue_id
+        data_tests: [not_null, unique]
+
+  - name: dim_date
+    description: Calendrier journalier (2020-01-01 à 2035-12-31). Grain, un jour.
+    columns:
+      - name: date_id
+        data_tests: [not_null, unique]
+      - name: mois
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 12
+
+  - name: dim_requete
+    description: >
+      Requêtes distinguées par texte, pays et langue. requete_id diffère du
+      requete_id de staging, qui ne hache que le texte.
+    columns:
+      - name: requete_id
+        data_tests: [not_null, unique]
+      - name: texte
+        data_tests: [not_null]
+      - name: pays_langue_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_pays_langue')
+                field: pays_langue_id
+      - name: intention_type
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_intention')
+                field: type
+
+  - name: pont_article_renvoi
+    description: >
+      Relations normatives orientées entre articles. Table vide tant que les liens
+      du corpus ne sont pas chargés dans raw (voir le commentaire du modèle).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [article_source_id, type_relation, article_cible_id]
+    columns:
+      - name: article_source_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_article')
+                field: article_id
+      - name: type_relation
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [RENVOIE_A, MODIFIE, ABROGE]
+      - name: article_cible_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_article')
+                field: article_id
+
+  - name: fait_extraction
+    description: >
+      Extractions IA retenues (statut VALIDE ou AUTO, confiance au-dessus du seuil).
+      modele_prompt_id est NULL si la version de prompt est absente de ref_modele_prompt.
+    columns:
+      - name: extraction_id
+        data_tests: [not_null, unique]
+      - name: article_version_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_article_version')
+                field: article_version_id
+      - name: notion_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_notion')
+                field: notion_id
+      - name: situation_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_situation_vie')
+                field: situation_id
+      - name: score_confiance
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: modele_prompt_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('ref_modele_prompt')
+                field: modele_prompt_id
+      - name: statut_validation
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [AUTO, A_REVOIR, VALIDE, REJETE]
+
+  - name: fait_notion_requete
+    description: Rattachements notion/requête. Grain, un couple notion et requête.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [notion_id, requete_id]
+    columns:
+      - name: notion_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_notion')
+                field: notion_id
+      - name: requete_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_requete')
+                field: requete_id
+      - name: score_rattachement
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+
+  - name: fait_metrique_mensuelle
+    description: >
+      Volume, CPC et concurrence par requête, mois et pays/langue, partitionnée par mois.
+      Seules les localisations de la variable localisations_pays sont retenues.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [requete_id, pays_langue_id, mois]
+    columns:
+      - name: requete_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_requete')
+                field: requete_id
+      - name: pays_langue_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_pays_langue')
+                field: pays_langue_id
+      - name: mois
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_id
+      - name: concurrence
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+
+  - name: fait_resultat_serp
+    description: Résultats SERP. Grain, une position pour une requête, une date et un pays/langue.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [requete_id, pays_langue_id, date_resultat, position]
+    columns:
+      - name: requete_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_requete')
+                field: requete_id
+      - name: pays_langue_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_pays_langue')
+                field: pays_langue_id
+      - name: date_resultat
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_id
+      - name: position
+        data_tests: [not_null]
+
+  - name: fait_cout_api
+    description: Coûts d'API par lot et par poste. Grain, un poste de coût.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [lot_id, fournisseur, service, date_cout, cout_id]
+    columns:
+      - name: cout_id
+        data_tests: [not_null, unique]
+      - name: date_cout
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_id
+      - name: montant
+        data_tests: [not_null]
+
+  - name: fait_gap_score
+    description: >
+      Score d'écart et criticité v1 par notion, code et pays/langue, calculés à la date
+      du jour. A(q) et G(n) sont des proxys (voir le commentaire du modèle).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [notion_id, version_score, date_calcul, code_id, pays_langue_id]
+    columns:
+      - name: gap_score_id
+        data_tests: [not_null, unique]
+      - name: notion_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_notion')
+                field: notion_id
+      - name: code_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_code')
+                field: code_id
+      - name: pays_langue_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_pays_langue')
+                field: pays_langue_id
+      - name: date_calcul
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_id
+      - name: version_score
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [v1]
+      - name: indice_demande
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: indice_saturation
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: indice_importance_normative
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: score_ecart
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: criticite_semantique
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: taille_cohorte
+        data_tests: [not_null]

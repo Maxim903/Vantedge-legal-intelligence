@@ -60,7 +60,9 @@ def parse_legi_article(path: str | Path) -> tuple[Article, ArticleVersion]:
 	start_date: date | None = None
 	end_date: date | None = None
 	text_parts: list[str] = []
-	sections: dict[str, list[tuple[str, date | None, date | None]]] = {
+	sections: dict[
+		str, list[tuple[str, str | None, date | None, date | None]]
+	] = {
 		"Livre": [],
 		"Titre": [],
 		"Chapitre": [],
@@ -105,7 +107,7 @@ def parse_legi_article(path: str | Path) -> tuple[Article, ArticleVersion]:
 					kind = match.group(1).capitalize()
 					begin = _date(element.get("debut"))
 					end = _date(element.get("fin"), open_end=True)
-					sections[kind].append((label, begin, end))
+					sections[kind].append((label, element.get("id"), begin, end))
 			elif tag == "CONTENU" and parent_tag == "BLOC_TEXTUEL":
 				text = _plain_text(element)
 				if text:
@@ -127,21 +129,27 @@ def parse_legi_article(path: str | Path) -> tuple[Article, ArticleVersion]:
 		):
 			raise ValueError("missing required article metadata")
 
-		def effective_section(kind: str) -> str:
-			for label, begin, end in reversed(sections[kind]):
+		def effective_section(kind: str) -> tuple[str, str | None]:
+			for label, section_id, begin, end in reversed(sections[kind]):
 				if begin is not None and begin <= start_date and (
 					end is None or start_date < end
 				):
-					return label
+					return label, section_id
 			raise ValueError(f"missing effective {kind.lower()} metadata")
 
+		livre, livre_id = effective_section("Livre")
+		titre, titre_id = effective_section("Titre")
+		chapitre, chapitre_id = effective_section("Chapitre")
 		article = Article(
 			article_id=article_id,
 			numero=numero,
 			code_id=code_id,
-			livre=effective_section("Livre"),
-			titre=effective_section("Titre"),
-			chapitre=effective_section("Chapitre"),
+			livre=livre,
+			titre=titre,
+			chapitre=chapitre,
+			livre_id=livre_id,
+			titre_id=titre_id,
+			chapitre_id=chapitre_id,
 		)
 		version = ArticleVersion(
 			article_version_id=article_id,
