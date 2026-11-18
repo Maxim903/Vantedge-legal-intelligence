@@ -22,7 +22,7 @@
     "d3-shape": "^3.2.1",
     "neo4j-driver": "^6.3.2",
     "next": "16.4.6",
-    "react": "19.3.0",
+    "react": "19.3.1",
     "react-dom": "19.3.0",
     "recharts": "^3.11.0",
     "server-only": "^0.0.1",
