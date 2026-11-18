@@ -21,7 +21,7 @@ jobs:
           [[ "$GCP_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || { echo "Invalid GCP_PROJECT_ID" >&2; exit 1; }
           [[ "$ARTIFACT_REGISTRY_REPOSITORY" =~ ^[a-z0-9][a-z0-9._-]{0,62}$ ]] || { echo "Invalid ARTIFACT_REGISTRY_REPOSITORY" >&2; exit 1; }
           echo "IMAGE=europe-west9-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/vil-pipeline:${GITHUB_SHA}" >> "$GITHUB_ENV"
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_ARTIFACT_REGISTRY_SERVICE_ACCOUNT }}
