@@ -44,7 +44,7 @@ def test_constraints_are_idempotent_and_enforced(neo4j_driver: Driver) -> None:
                     "labelsOrTypes, properties "
                     "RETURN type, entityType, labelsOrTypes, properties"
                 )
-                if record["type"] == "UNIQUENESS"
+                if record["type"] in {"UNIQUENESS", "NODE_PROPERTY_UNIQUENESS"}
                 and record["entityType"] == "NODE"
                 and len(record["labelsOrTypes"]) == 1
                 and len(record["properties"]) == 1

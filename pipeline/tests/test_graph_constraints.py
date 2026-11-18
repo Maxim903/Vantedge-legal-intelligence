@@ -35,7 +35,7 @@ def test_conflicting_constraint_name_is_not_silently_accepted(tmp_path: Path) ->
     session.run.return_value.__iter__.return_value = iter(
         [
             {
-                "type": "UNIQUENESS",
+                "type": "NODE_PROPERTY_UNIQUENESS",
                 "entityType": "NODE",
                 "labelsOrTypes": ["Article"],
                 "properties": ["article_id"],

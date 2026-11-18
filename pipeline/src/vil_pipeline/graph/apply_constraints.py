@@ -10,6 +10,9 @@ DEFAULT_CONSTRAINTS_FILE = (
     Path(__file__).resolve().parents[4] / "graph" / "constraints.cypher"
 )
 
+# Neo4j 4 reports UNIQUENESS; Neo4j 5 and Aura report NODE_PROPERTY_UNIQUENESS.
+_UNIQUENESS_TYPES = {"UNIQUENESS", "NODE_PROPERTY_UNIQUENESS"}
+
 _CONSTRAINT = re.compile(
     r"CREATE\s+CONSTRAINT\s+[A-Za-z_][A-Za-z0-9_]*\s+IF\s+NOT\s+EXISTS\s+"
     r"FOR\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
@@ -49,7 +52,7 @@ def apply_constraints(
         actual = {
             (row["labelsOrTypes"][0], row["properties"][0])
             for row in rows
-            if row["type"] == "UNIQUENESS"
+            if row["type"] in _UNIQUENESS_TYPES
             and row["entityType"] == "NODE"
             and len(row["labelsOrTypes"]) == 1
             and len(row["properties"]) == 1
