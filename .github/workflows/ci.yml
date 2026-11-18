@@ -131,7 +131,7 @@ jobs:
           workload_identity_provider: ${{ vars.E2E_GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.E2E_GCP_SERVICE_ACCOUNT }}
           project_id: ${{ vars.E2E_GCP_PROJECT_ID }}
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
       - name: Préparer le jeu BigQuery dédié
         run: |
           if ! bq show "$GCP_PROJECT_ID:marts" >/dev/null 2>&1; then

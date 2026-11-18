@@ -26,7 +26,7 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_ARTIFACT_REGISTRY_SERVICE_ACCOUNT }}
           project_id: ${{ vars.GCP_PROJECT_ID }}
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
       - name: Configure registry authentication
         run: gcloud auth configure-docker europe-west9-docker.pkg.dev --quiet
       - name: Build image
