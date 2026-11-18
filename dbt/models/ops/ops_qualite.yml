@@ -1,0 +1,99 @@
+version: 2
+
+models:
+  - name: ops_qualite
+    description: >
+      Vue opérationnelle : une ligne par notion sans requête, par requête et
+      contexte sans volume positif récemment collecté, et une ligne de taux de
+      quarantaine sur les 60 derniers jours. Le taux est NULL sans extraction.
+    columns:
+      - name: type_controle
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [notion_sans_requete, requete_sans_volume_60j, taux_quarantaine_60j]
+      - name: notion_id
+        description: Identifiant de la notion pour notion_sans_requete.
+      - name: requete_id
+        description: Identifiant de la requête pour requete_sans_volume_60j.
+      - name: pays_langue_id
+        description: Contexte de la requête.
+      - name: libelle
+        description: Libellé de la notion ou texte de la requête.
+      - name: derniere_collecte_volume
+        description: Dernière date non future de collecte d'un volume strictement positif.
+      - name: nombre_quarantaine
+        description: Nombre de résultats QUARANTINE sur les dernières 60 journées glissantes.
+      - name: nombre_extractions
+        description: Nombre total de résultats d'extraction sur la même période.
+      - name: taux_quarantaine
+        description: Ratio entre 0 et 1 ; NULL en absence de résultat d'extraction.
+
+unit_tests:
+  - name: controle_notions_volumes_et_quarantaine
+    model: ops_qualite
+    overrides:
+      macros:
+        qualite_maintenant: "timestamp('2026-03-01 12:00:00+00')"
+    given:
+      - input: ref('dim_notion')
+        rows:
+          - {notion_id: n1, libelle: Notion liée}
+          - {notion_id: n2, libelle: Notion isolée}
+      - input: ref('fait_notion_requete')
+        rows:
+          - {notion_id: n1, requete_id: q1}
+      - input: ref('dim_requete')
+        rows:
+          - {requete_id: q1, texte: recente, pays_langue_id: fr}
+          - {requete_id: q2, texte: limite, pays_langue_id: fr}
+          - {requete_id: q3, texte: absente, pays_langue_id: fr}
+          - {requete_id: q4, texte: zero, pays_langue_id: fr}
+          - {requete_id: q5, texte: contexte, pays_langue_id: fr}
+          - {requete_id: q6, texte: future, pays_langue_id: fr}
+          - {requete_id: q7, texte: precedent, pays_langue_id: fr}
+      - input: ref('dim_pays_langue')
+        rows:
+          - {pays_langue_id: fr, pays: FR, langue: fr}
+      - input: source('raw', 'dataforseo_volumes')
+        rows:
+          - {mot_cle: " RECENTE ", localisation: 2250, langue: fr, volume: 5, date_archive: "2026-01-01"}
+          - {mot_cle: limite, localisation: 2250, langue: fr, volume: 1, date_archive: "2025-12-31"}
+          - {mot_cle: absente, localisation: 2250, langue: fr, volume: null, date_archive: "2026-02-28"}
+          - {mot_cle: zero, localisation: 2250, langue: fr, volume: 0, date_archive: "2026-02-28"}
+          - {mot_cle: contexte, localisation: 2250, langue: en, volume: 10, date_archive: "2026-02-28"}
+          - {mot_cle: future, localisation: 2250, langue: fr, volume: 10, date_archive: "2026-03-02"}
+          - {mot_cle: precedent, localisation: 2250, langue: fr, volume: 10, date_archive: "2026-02-01"}
+          - {mot_cle: precedent, localisation: 2250, langue: fr, volume: 0, date_archive: "2026-02-28"}
+      - input: source('ops', 'extraction_results')
+        rows:
+          - {statut: QUARANTINE, extrait_le: "2025-12-31 12:00:00+00"}
+          - {statut: SUCCESS, extrait_le: "2026-03-01 12:00:00+00"}
+          - {statut: QUARANTINE, extrait_le: "2025-12-31 11:59:59+00"}
+          - {statut: QUARANTINE, extrait_le: "2026-03-01 12:00:01+00"}
+    expect:
+      rows:
+        - {type_controle: notion_sans_requete, notion_id: n2, requete_id: null, nombre_quarantaine: null, nombre_extractions: null, taux_quarantaine: null}
+        - {type_controle: requete_sans_volume_60j, notion_id: null, requete_id: q2, nombre_quarantaine: null, nombre_extractions: null, taux_quarantaine: null}
+        - {type_controle: requete_sans_volume_60j, notion_id: null, requete_id: q3, nombre_quarantaine: null, nombre_extractions: null, taux_quarantaine: null}
+        - {type_controle: requete_sans_volume_60j, notion_id: null, requete_id: q4, nombre_quarantaine: null, nombre_extractions: null, taux_quarantaine: null}
+        - {type_controle: requete_sans_volume_60j, notion_id: null, requete_id: q5, nombre_quarantaine: null, nombre_extractions: null, taux_quarantaine: null}
+        - {type_controle: requete_sans_volume_60j, notion_id: null, requete_id: q6, nombre_quarantaine: null, nombre_extractions: null, taux_quarantaine: null}
+        - {type_controle: taux_quarantaine_60j, notion_id: null, requete_id: null, nombre_quarantaine: 1, nombre_extractions: 2, taux_quarantaine: 0.5}
+
+  - name: taux_quarantaine_indisponible_sans_resultat
+    model: ops_qualite
+    overrides:
+      macros:
+        qualite_maintenant: "timestamp('2026-03-01 12:00:00+00')"
+    given:
+      - {input: "ref('dim_notion')", rows: []}
+      - {input: "ref('fait_notion_requete')", rows: []}
+      - {input: "ref('dim_requete')", rows: []}
+      - {input: "ref('dim_pays_langue')", rows: []}
+      - {input: "source('raw', 'dataforseo_volumes')", rows: []}
+      - {input: "source('ops', 'extraction_results')", rows: []}
+    expect:
+      rows:
+        - {type_controle: taux_quarantaine_60j, nombre_quarantaine: 0, nombre_extractions: 0, taux_quarantaine: null}

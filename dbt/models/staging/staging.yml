@@ -1,0 +1,69 @@
+version: 2
+
+models:
+  - name: stg_articles
+    description: Articles dédupliqués (dernier chargement par article).
+    columns:
+      - name: article_id
+        data_tests: [not_null, unique]
+
+  - name: stg_article_versions
+    description: Versions d'articles dédupliquées (dernier chargement par version).
+    columns:
+      - name: article_version_id
+        data_tests: [not_null, unique]
+      - name: article_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_articles')
+                field: article_id
+              config:
+                severity: warn
+
+  - name: stg_extractions
+    description: Extractions de notions dédupliquées (dernière par extraction_id).
+    columns:
+      - name: extraction_id
+        data_tests: [not_null, unique]
+      - name: article_version_id
+        data_tests: [not_null]
+
+  - name: stg_requetes
+    description: Requêtes candidates normalisées, une ligne par couple notion/requête.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [notion_id, requete_id]
+    columns:
+      - name: requete_id
+        data_tests: [not_null]
+      - name: notion_id
+        data_tests: [not_null]
+
+  - name: stg_metriques
+    description: Dernières métriques de volume par requête, localisation et langue.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [requete_id, localisation, langue]
+    columns:
+      - name: requete_id
+        data_tests: [not_null]
+
+  - name: stg_serp
+    description: Résultats SERP de la dernière archive de chaque requête.
+    columns:
+      - name: resultat_serp_id
+        data_tests: [not_null, unique]
+      - name: requete_id
+        data_tests: [not_null]
+
+  - name: stg_intentions
+    description: Dernière intention classée par requête.
+    columns:
+      - name: requete_id
+        data_tests: [not_null, unique]
+      - name: intention_type
+        data_tests: [not_null]

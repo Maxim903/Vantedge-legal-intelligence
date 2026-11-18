@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+playwright-report/
+test-results/
+
+# dbt
+target/
+dbt_packages/
+logs/
+dbt/.user.yml
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+credentials*.json
+*.pem

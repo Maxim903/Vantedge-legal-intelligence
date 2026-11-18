@@ -1,0 +1,42 @@
+name: Publish pipeline image
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate registry configuration
+        run: |
+          [[ "$GCP_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || { echo "Invalid GCP_PROJECT_ID" >&2; exit 1; }
+          [[ "$ARTIFACT_REGISTRY_REPOSITORY" =~ ^[a-z0-9][a-z0-9._-]{0,62}$ ]] || { echo "Invalid ARTIFACT_REGISTRY_REPOSITORY" >&2; exit 1; }
+          echo "IMAGE=europe-west9-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/vil-pipeline:${GITHUB_SHA}" >> "$GITHUB_ENV"
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_ARTIFACT_REGISTRY_SERVICE_ACCOUNT }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure registry authentication
+        run: gcloud auth configure-docker europe-west9-docker.pkg.dev --quiet
+      - name: Build image
+        run: docker build --file pipeline/Dockerfile --tag "$IMAGE" .
+      - name: Smoke-test image
+        run: |
+          docker run --rm "$IMAGE" --help
+          docker run --rm --entrypoint python "$IMAGE" -c "import os; from vil_pipeline.apply_migrations import DEFAULT_MIGRATIONS_DIR; from vil_pipeline.graph.apply_constraints import DEFAULT_CONSTRAINTS_FILE; from vil_pipeline.jobs.evaluate_extraction import DEFAULT_GOLDEN, DEFAULT_TITLES; from prompts.loader import load_prompt; assert os.getuid() != 0; assert list(DEFAULT_MIGRATIONS_DIR.glob('*.sql')); assert DEFAULT_CONSTRAINTS_FILE.is_file(); assert DEFAULT_GOLDEN.is_file() and DEFAULT_TITLES.is_file(); assert load_prompt()[0]"
+          docker run --rm --entrypoint python "$IMAGE" -m graph --help
+          docker run --rm --entrypoint dbt "$IMAGE" --version
+          docker run --rm -e GCP_PROJECT_ID=build-placeholder --entrypoint dbt "$IMAGE" parse --project-dir /app/dbt --profiles-dir /app/dbt
+      - name: Push image
+        run: docker push "$IMAGE"

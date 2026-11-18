@@ -1,0 +1,195 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  detect-web:
+    runs-on: ubuntu-latest
+    outputs:
+      web_exists: ${{ steps.check.outputs.web_exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -f apps/web/package.json ]; then
+            echo "web_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pipeline/pyproject.toml
+            pipeline/uv.lock
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: pipeline
+        run: uv sync --extra dev
+      - name: Ruff
+        working-directory: pipeline
+        run: uv run ruff check .
+      - name: Mypy
+        working-directory: pipeline
+        run: uv run mypy
+      - name: Pytest
+        working-directory: pipeline
+        run: uv run pytest
+
+  web:
+    needs: detect-web
+    if: needs.detect-web.outputs.web_exists == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Vitest
+        run: npx vitest run
+
+  accessibility:
+    needs: detect-web
+    if: needs.detect-web.outputs.web_exists == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: local-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:a11y
+
+  e2e:
+    needs: detect-web
+    if: needs.detect-web.outputs.web_exists == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    environment: e2e
+    concurrency:
+      group: e2e-bigquery-fixture
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.E2E_GCP_PROJECT_ID }}
+      BQ_LOCATION: europe-west9
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      STRIPE_API_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      STRIPE_PRICE_PRO: ${{ vars.E2E_STRIPE_PRICE_PRO }}
+      STRIPE_DEVICE_NAME: e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      APP_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Vérifier la configuration de test
+        run: |
+          test -n "$GCP_PROJECT_ID"
+          case "$STRIPE_SECRET_KEY" in sk_test_*) ;; *) echo "Clé Stripe test requise" >&2; exit 1 ;; esac
+          case "$STRIPE_PRICE_PRO" in price_*) ;; *) echo "Prix Stripe test requis" >&2; exit 1 ;; esac
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.E2E_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.E2E_GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ vars.E2E_GCP_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Préparer le jeu BigQuery dédié
+        run: |
+          if ! bq show "$GCP_PROJECT_ID:marts" >/dev/null 2>&1; then
+            bq mk --dataset --location="$BQ_LOCATION" "$GCP_PROJECT_ID:marts"
+          fi
+          bq query --project_id="$GCP_PROJECT_ID" --location="$BQ_LOCATION" --use_legacy_sql=false < apps/web/e2e/fixtures/marts.sql
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Démarrer Supabase et initialiser le plan
+        run: |
+          supabase start > "$RUNNER_TEMP/supabase-start.log" 2>&1 || { echo "Démarrage Supabase impossible" >&2; exit 1; }
+          status="$(supabase status -o json)"
+          api_url="$(jq -er '.API_URL' <<< "$status")"
+          anon_key="$(jq -er '.ANON_KEY' <<< "$status")"
+          service_key="$(jq -er '.SERVICE_ROLE_KEY' <<< "$status")"
+          db_url="$(jq -er '.DB_URL' <<< "$status")"
+          echo "::add-mask::$anon_key"
+          echo "::add-mask::$service_key"
+          echo "::add-mask::$db_url"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$api_url" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon_key" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$service_key" >> "$GITHUB_ENV"
+          psql "$db_url" -v ON_ERROR_STOP=1 -c "insert into public.plans (code, quota_mensuel_analyses) values ('pro', 5)"
+      - name: Installer Stripe CLI
+        run: |
+          curl -fsSL https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" | sudo tee /etc/apt/sources.list.d/stripe.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y stripe
+      - name: Transférer les webhooks Stripe de test
+        run: |
+          secret="$(stripe listen --print-secret)"
+          case "$secret" in whsec_*) ;; *) echo "Secret webhook absent" >&2; exit 1 ;; esac
+          echo "::add-mask::$secret"
+          echo "STRIPE_WEBHOOK_SECRET=$secret" >> "$GITHUB_ENV"
+          stripe listen --forward-to http://127.0.0.1:3000/api/stripe/webhook > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/stripe-listen.pid"
+          for attempt in $(seq 1 30); do
+            if grep -q 'Ready!' "$RUNNER_TEMP/stripe-listen.log"; then exit 0; fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/stripe-listen.pid")" 2>/dev/null; then echo "Stripe CLI arrêté" >&2; exit 1; fi
+            sleep 1
+          done
+          echo "Stripe CLI indisponible" >&2
+          exit 1
+      - name: Installer les dépendances et Chromium
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Construire et exécuter le parcours E2E
+        working-directory: apps/web
+        run: |
+          npm run build
+          npm run test:e2e
+      - name: Arrêter le transfert Stripe
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/stripe-listen.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/stripe-listen.pid")" 2>/dev/null || true
+          fi
