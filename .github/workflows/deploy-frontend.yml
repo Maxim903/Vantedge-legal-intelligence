@@ -7,7 +7,7 @@ on:
       - 'apps/web/**'
       - 'scripts/deploy-frontend.sh'
       - '.github/workflows/deploy-frontend.yml'
-  workflow_dispatch:
+  workflow_dispatch:  # Allow manual trigger
 
 env:
   REGISTRY: europe-west9-docker.pkg.dev
