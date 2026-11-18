@@ -1,3 +1,5 @@
+# Multi-stage Docker build for Next.js application
+# Production-optimized image with Alpine Linux
 # Build stage
 FROM node:20-alpine AS builder
 
