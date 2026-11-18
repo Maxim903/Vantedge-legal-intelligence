@@ -44,7 +44,7 @@ def test_build_seed_queries_reads_only_validated_entities_and_writes_rows():
 	count = build_seed_queries(client)
 
 	assert count == 2
-	sql = client.query.call_args.args[0]
+	sql = client.query.call_args_list[1].args[0]
 	assert "FROM `raw.entites_extraites`" in sql
 	assert "statut_validation = 'VALIDE'" in sql
 	client.insert.assert_called_once()

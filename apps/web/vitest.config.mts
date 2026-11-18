@@ -4,6 +4,14 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    fs: {
+      allow: [
+        fileURLToPath(new URL(".", import.meta.url)),
+        fileURLToPath(new URL("../../graph/queries", import.meta.url)),
+      ],
+    },
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

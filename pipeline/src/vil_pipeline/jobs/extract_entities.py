@@ -13,6 +13,7 @@ from vil_pipeline.clients.llm import LLMClient, LLMResponse
 from vil_pipeline.errors import ApiBudgetExceeded
 from vil_pipeline.extraction.validate import QuarantaineExtraction, extract_and_validate
 from vil_pipeline.models.extraction import ResultatExtraction
+from vil_pipeline.tracking import tracked_run
 
 _SELECT = """
 WITH versions AS (
@@ -70,13 +71,7 @@ END IF;
 COMMIT TRANSACTION;
 """
 
-_RUN = """
-INSERT INTO `ops.pipeline_runs`
-  (run_id, job, debut, fin, statut, compteurs, erreur, cout_estime)
-VALUES
-  (@run_id, 'extract_entities', @started, @finished, @status,
-   PARSE_JSON(@counts), @error, @cost)
-"""
+
 
 
 @dataclass
@@ -157,119 +152,118 @@ def extract_entities(
 
 	Cost is an estimate per LLMClient.extract invocation, not a billing guarantee.
 	"""
-	for name, value in (("max_cost", max_cost), ("cost_per_call", cost_per_call)):
-		exponent = value.as_tuple().exponent
-		if (
-			not value.is_finite()
-			or value < 0
-			or not isinstance(exponent, int)
-			or exponent < -9
-		):
-			raise ValueError(
-				f"{name} must be finite, non-negative and have <= 9 decimals"
-			)
-	if cost_per_call == 0:
-		raise ValueError("cost_per_call must be greater than zero")
-	if batch_size < 1:
-		raise ValueError("batch_size must be greater than zero")
-	if not prompt.strip() or not version_prompt.strip() or not model.strip():
-		raise ValueError("prompt, version_prompt and model must not be empty")
-	if not dry_run and llm is None:
-		raise ValueError("llm is required unless dry_run is enabled")
-
-	stats = ExtractionStats(run_id=str(uuid4()), dry_run=dry_run)
-	budgeted = (
-		_BudgetedClient(llm, model, max_cost, cost_per_call, stats)
-		if llm is not None else None
-	)
-	started = datetime.now(UTC)
-	error_message: str | None = None
-	last_id = ""
-	try:
-		while True:
-			query_result = bq.query(_SELECT, [
-				_param("last_id", "STRING", last_id),
-				_param("version_prompt", "STRING", version_prompt),
-				_param("model", "STRING", model),
-				_param("batch_size", "INT64", batch_size),
-			])
-			if isinstance(query_result, QueryJob):
-				raise ValueError("Le client BigQuery ne doit pas être en mode dry-run")
-			rows = list(query_result)
-			for row in rows:
-				article_id = row["article_version_id"]
-				text = row["texte"]
+	with tracked_run(bq, "extract_entities") as run:
+		stats = ExtractionStats(run_id=run.run_id, dry_run=dry_run)
+		try:
+			for name, value in (
+				("max_cost", max_cost), ("cost_per_call", cost_per_call)
+			):
+				exponent = value.as_tuple().exponent
 				if (
-					not isinstance(article_id, str)
-					or not isinstance(text, str)
-					or not text
+					not value.is_finite()
+					or value < 0
+					or not isinstance(exponent, int)
+					or exponent < -9
 				):
 					raise ValueError(
-						"La version d'article doit contenir un identifiant et un texte"
+						f"{name} must be finite, non-negative and have <= 9 decimals"
 					)
-				last_id = article_id
-				stats.read += 1
-				if dry_run:
-					stats.estimated_cost += cost_per_call
-					continue
-				if budgeted is None:
-					raise RuntimeError("Client LLM manquant")
-				article_prompt = (
-					f"{prompt}\n\nIdentifiant de la version de cet article : "
-					f"{article_id}. "
-					"Utilise exactement cet identifiant dans article_version_id."
-				)
-				result = extract_and_validate(
-					budgeted, text, article_prompt, article_version_id=article_id
-				)
-				response = budgeted.last_response
-				if response is None:
-					raise RuntimeError("Réponse LLM manquante")
-				if isinstance(result, QuarantaineExtraction):
-					status = "QUARANTINE"
-					reason = result.reason
-					entities: list[dict[str, object]] = []
-				else:
-					status = "SUCCESS"
-					reason = None
-					entities = _entities(result)
-				bq.query(_SAVE, [
-					_param("article_id", "STRING", article_id),
+			if cost_per_call == 0:
+				raise ValueError("cost_per_call must be greater than zero")
+			if batch_size < 1:
+				raise ValueError("batch_size must be greater than zero")
+			if not prompt.strip() or not version_prompt.strip() or not model.strip():
+				raise ValueError("prompt, version_prompt and model must not be empty")
+			if not dry_run and llm is None:
+				raise ValueError("llm is required unless dry_run is enabled")
+
+			budgeted = (
+				_BudgetedClient(llm, model, max_cost, cost_per_call, stats)
+				if llm is not None else None
+			)
+			last_id = ""
+
+			while True:
+				query_result = bq.query(_SELECT, [
+					_param("last_id", "STRING", last_id),
 					_param("version_prompt", "STRING", version_prompt),
 					_param("model", "STRING", model),
-					_param("status", "STRING", status),
-					_param("raw_json", "STRING", response.raw_json),
-					_param("reason", "STRING", reason),
-					_param(
-						"entities", "STRING", json.dumps(entities, ensure_ascii=False)
-					),
-					_param("extrait_le", "TIMESTAMP", datetime.now(UTC)),
-					_param("run_id", "STRING", stats.run_id),
+					_param("batch_size", "INT64", batch_size),
 				])
-				stats.processed += 1
-				stats.entities += len(entities)
-				stats.quarantined += int(status == "QUARANTINE")
-			if not rows or len(rows) < batch_size:
-				break
-		if dry_run and stats.estimated_cost > max_cost:
-			stats.status = "DRY_RUN_OVER_BUDGET"
-	except ApiBudgetExceeded as error:
-		stats.status = "BUDGET_EXHAUSTED"
-		error_message = str(error)
-	except Exception as error:
-		stats.status = "FAILED"
-		error_message = f"{type(error).__name__}: {error}"
-		raise
-	finally:
-		counts = asdict(stats)
-		counts.pop("estimated_cost")
-		bq.query(_RUN, [
-			_param("run_id", "STRING", stats.run_id),
-			_param("started", "TIMESTAMP", started),
-			_param("finished", "TIMESTAMP", datetime.now(UTC)),
-			_param("status", "STRING", stats.status),
-			_param("counts", "STRING", json.dumps(counts)),
-			_param("error", "STRING", error_message),
-			_param("cost", "NUMERIC", stats.estimated_cost),
-		])
+				if isinstance(query_result, QueryJob):
+					raise ValueError(
+						"Le client BigQuery ne doit pas être en mode dry-run"
+					)
+				rows = list(query_result)
+				for row in rows:
+					article_id = row["article_version_id"]
+					text = row["texte"]
+					if (
+						not isinstance(article_id, str)
+						or not isinstance(text, str)
+						or not text
+					):
+						raise ValueError(
+							"La version d'article doit contenir "
+							"un identifiant et un texte"
+						)
+					last_id = article_id
+					stats.read += 1
+					if dry_run:
+						stats.estimated_cost += cost_per_call
+						continue
+					if budgeted is None:
+						raise RuntimeError("Client LLM manquant")
+					article_prompt = (
+						f"{prompt}\n\nIdentifiant de la version de cet article : "
+						f"{article_id}. "
+						"Utilise exactement cet identifiant dans article_version_id."
+					)
+					result = extract_and_validate(
+						budgeted, text, article_prompt, article_version_id=article_id
+					)
+					response = budgeted.last_response
+					if response is None:
+						raise RuntimeError("Réponse LLM manquante")
+					if isinstance(result, QuarantaineExtraction):
+						status = "QUARANTINE"
+						reason = result.reason
+						entities: list[dict[str, object]] = []
+					else:
+						status = "SUCCESS"
+						reason = None
+						entities = _entities(result)
+					bq.query(_SAVE, [
+						_param("article_id", "STRING", article_id),
+						_param("version_prompt", "STRING", version_prompt),
+						_param("model", "STRING", model),
+						_param("status", "STRING", status),
+						_param("raw_json", "STRING", response.raw_json),
+						_param("reason", "STRING", reason),
+						_param(
+							"entities", "STRING",
+							json.dumps(entities, ensure_ascii=False),
+						),
+						_param("extrait_le", "TIMESTAMP", datetime.now(UTC)),
+						_param("run_id", "STRING", stats.run_id),
+					])
+					stats.processed += 1
+					stats.entities += len(entities)
+					stats.quarantined += int(status == "QUARANTINE")
+				if not rows or len(rows) < batch_size:
+					break
+			if dry_run and stats.estimated_cost > max_cost:
+				stats.status = "DRY_RUN_OVER_BUDGET"
+		except ApiBudgetExceeded:
+			stats.status = "BUDGET_EXHAUSTED"
+			run.error = "ApiBudgetExceeded"
+		except BaseException:
+			stats.status = "FAILED"
+			raise
+		finally:
+			run.status = stats.status
+			counts = asdict(stats)
+			counts.pop("estimated_cost")
+			run.counts = counts
+			run.estimated_cost = stats.estimated_cost
 	return stats

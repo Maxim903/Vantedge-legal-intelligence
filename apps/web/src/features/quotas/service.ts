@@ -31,6 +31,21 @@ const quotaResultSchema = z.discriminatedUnion("motif", [
 
 export type QuotaResult = z.infer<typeof quotaResultSchema>;
 
+const analysisConsumptionSchema = z.discriminatedUnion("statut", [
+  z.object({ statut: z.literal("existante") }),
+  z.object({
+    statut: z.literal("cree"),
+    quota: quotaResultSchema.refine((result) => result.autorise),
+  }),
+  z.object({
+    statut: z.literal("refusee"),
+    quota: quotaResultSchema.refine((result) => !result.autorise),
+  }),
+]);
+
+export type AnalysisConsumption = z.infer<typeof analysisConsumptionSchema>;
+type AnalysisRequest = { projectId: string; notionId: string };
+
 async function quota(userId: string, consume: boolean): Promise<QuotaResult> {
   const parsedUserId = z.uuid().parse(userId);
   const { data, error } = await createAdminClient().rpc("quota_mensuel", {
@@ -49,6 +64,26 @@ export async function checkQuota(userId: string): Promise<QuotaResult> {
 }
 
 /** Réserve une unité si la limite n'est pas atteinte, en une transaction SQL. */
-export async function consumeQuota(userId: string): Promise<QuotaResult> {
-  return quota(userId, true);
+export function consumeQuota(userId: string): Promise<QuotaResult>;
+export function consumeQuota(
+  userId: string,
+  analysis: AnalysisRequest,
+): Promise<AnalysisConsumption>;
+export async function consumeQuota(
+  userId: string,
+  analysis?: AnalysisRequest,
+): Promise<QuotaResult | AnalysisConsumption> {
+  if (!analysis) return quota(userId, true);
+  const parsedUserId = z.uuid().parse(userId);
+  const projectId = z.uuid().parse(analysis.projectId);
+  const notionId = z.string().trim().min(1).parse(analysis.notionId);
+  const { data, error } = await createAdminClient().rpc("ouvrir_analyse", {
+    p_user_id: parsedUserId,
+    p_project_id: projectId,
+    p_notion_id: notionId,
+  });
+  if (error) {
+    throw new Error("Impossible d'ouvrir l'analyse.", { cause: error });
+  }
+  return analysisConsumptionSchema.parse(data);
 }

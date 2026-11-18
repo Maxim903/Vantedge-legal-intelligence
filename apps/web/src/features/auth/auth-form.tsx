@@ -46,10 +46,13 @@ export function AuthForm({
               required={f.required}
               aria-invalid={errors ? true : undefined}
               aria-describedby={errors ? `${f.name}-erreur` : undefined}
-              className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded border border-zinc-500 px-3 py-2 dark:border-zinc-400 dark:bg-zinc-900"
             />
             {errors && (
-              <span id={`${f.name}-erreur`} className="text-red-600">
+              <span
+                id={`${f.name}-erreur`}
+                className="text-red-600 dark:text-red-400"
+              >
                 {errors[0]}
               </span>
             )}
@@ -57,12 +60,12 @@ export function AuthForm({
         );
       })}
       {state.error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {state.error}
         </p>
       )}
       {state.message && (
-        <p role="status" className="text-sm text-green-700">
+        <p role="status" className="text-sm text-green-700 dark:text-green-400">
           {state.message}
         </p>
       )}

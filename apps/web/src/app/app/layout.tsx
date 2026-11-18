@@ -11,7 +11,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         Aller au contenu
       </a>
       <AppHeader />
-      <main id="contenu" className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+      <main
+        id="contenu"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-5xl flex-1 px-4 py-8"
+      >
         {children}
       </main>
     </div>

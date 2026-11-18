@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install lint format test pipeline-test web-test dbt-run clean
+.PHONY: help install lint format test pipeline-test web-test neo4j-test-up dbt-run clean
 
 help:
 	@printf '%s\n' \
@@ -13,6 +13,7 @@ help:
 		'  test          Run all available tests' \
 		'  pipeline-test Run pipeline tests with coverage' \
 		'  web-test      Run web tests when the app is initialized' \
+		'  neo4j-test-up Start the local Neo4j integration-test database' \
 		'  dbt-run       Run dbt models when the project is initialized' \
 		'  clean         Remove generated caches and build artifacts' \
 		'  help          Show this help message'
@@ -38,6 +39,10 @@ web-test:
 	else \
 		printf '%s\n' 'Skipping web tests: apps/web/package.json does not exist yet.'; \
 	fi
+
+neo4j-test-up:
+	docker compose -p vantedge-neo4j-test -f docker-compose.test.yml up --detach --wait --wait-timeout 180
+	@printf '%s\n' 'Neo4j ready. Set NEO4J_TEST_URI=bolt://127.0.0.1:17687 to run integration tests.'
 
 dbt-run:
 	@if [ -f dbt/dbt_project.yml ]; then \

@@ -91,4 +91,30 @@ describe("service des quotas", () => {
     await expect(consumeQuota("invalide")).rejects.toThrow();
     expect(rpc).not.toHaveBeenCalled();
   });
+
+  it("consomme et enregistre une analyse dans une seule transaction", async () => {
+    const projectId = "22222222-2222-4222-8222-222222222222";
+    rpc.mockResolvedValue({
+      data: { statut: "cree", quota: disponible },
+      error: null,
+    });
+    expect(
+      await consumeQuota(userId, { projectId, notionId: "notion-1" }),
+    ).toMatchObject({ statut: "cree" });
+    expect(rpc).toHaveBeenCalledWith("ouvrir_analyse", {
+      p_user_id: userId,
+      p_project_id: projectId,
+      p_notion_id: "notion-1",
+    });
+    rpc.mockResolvedValue({
+      data: {
+        statut: "cree",
+        quota: { ...disponible, autorise: false, motif: "limite_atteinte" },
+      },
+      error: null,
+    });
+    await expect(
+      consumeQuota(userId, { projectId, notionId: "notion-1" }),
+    ).rejects.toThrow();
+  });
 });

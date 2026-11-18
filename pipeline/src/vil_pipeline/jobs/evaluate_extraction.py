@@ -14,6 +14,7 @@ from google.cloud.bigquery import QueryJob, ScalarQueryParameter
 
 from vil_pipeline.clients.bigquery import BigQueryClient
 from vil_pipeline.extraction.validate import validate_extraction
+from vil_pipeline.tracking import tracked_run
 
 ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_GOLDEN = ROOT / "docs/05-ia/golden-set.csv"
@@ -234,8 +235,30 @@ def evaluate_extraction(
 	output_path: Path | None = None,
 ) -> Path:
 	"""Write an evaluation report without changing references or stored results."""
+	with tracked_run(client, "evaluate_extraction") as run:
+		return _evaluate_extraction(
+			client, model=model, version_prompt=version_prompt,
+			golden_path=golden_path, titles_path=titles_path,
+			output_path=output_path, run_counts=run.counts,
+		)
+
+
+def _evaluate_extraction(
+	client: BigQueryClient,
+	*,
+	model: str,
+	version_prompt: str,
+	golden_path: Path,
+	titles_path: Path,
+	output_path: Path | None,
+	run_counts: dict[str, object],
+) -> Path:
 	refs, total_articles, skipped = load_reference(golden_path, titles_path)
+	run_counts.update(
+		articles_total=total_articles, articles_annotated=len(refs), skipped=skipped
+	)
 	predictions = fetch_predictions(client, refs, model=model, prompt=version_prompt)
+	run_counts["predictions"] = len(predictions)
 	total, titles = score(refs, predictions)
 	now = datetime.now(UTC)
 	if output_path is None:

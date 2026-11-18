@@ -24,3 +24,16 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid #155dfc;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :focus-visible {
+      outline-color: #51a2ff;
+    }
+  }
+}

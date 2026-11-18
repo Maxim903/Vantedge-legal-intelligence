@@ -8,6 +8,7 @@ from pathlib import Path
 from google.cloud.bigquery import QueryJob, ScalarQueryParameter
 
 from vil_pipeline.clients.bigquery import BigQueryClient
+from vil_pipeline.tracking import tracked_run
 
 _FIELDS = (
 	"extraction_id", "article_version_id", "notion_libelle", "situation_de_vie",
@@ -64,6 +65,15 @@ def export_review(
 	client: BigQueryClient, output: Path, *, threshold: float
 ) -> int:
 	"""Export selected entities, preserving their initial review state."""
+	with tracked_run(client, "export_review") as run:
+		count = _export_review(client, output, threshold=threshold)
+		run.counts["exported"] = count
+		return count
+
+
+def _export_review(
+	client: BigQueryClient, output: Path, *, threshold: float
+) -> int:
 	if not math.isfinite(threshold) or not 0 <= threshold <= 1:
 		raise ValueError("Le seuil doit être un nombre fini entre 0 et 1")
 	result = client.query(
@@ -111,6 +121,13 @@ def export_review(
 
 def import_review(client: BigQueryClient, source: Path) -> int:
 	"""Validate the entire review CSV, then apply decisions in one transaction."""
+	with tracked_run(client, "import_review") as run:
+		count = _import_review(client, source)
+		run.counts["imported"] = count
+		return count
+
+
+def _import_review(client: BigQueryClient, source: Path) -> int:
 	decisions: list[dict[str, str | None]] = []
 	seen: set[str] = set()
 	with source.open(encoding="utf-8-sig", newline="") as stream:

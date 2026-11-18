@@ -28,13 +28,13 @@ export default function Home() {
         </Link>
         <Link
           href="/inscription"
-          className={`${linkStyle} border border-zinc-400`}
+          className={`${linkStyle} border border-zinc-500 dark:border-zinc-400`}
         >
           Créer un compte
         </Link>
         <Link
           href="/app/compte"
-          className={`${linkStyle} border border-zinc-400`}
+          className={`${linkStyle} border border-zinc-500 dark:border-zinc-400`}
         >
           Mon compte
         </Link>

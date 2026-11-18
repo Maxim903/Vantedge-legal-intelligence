@@ -8,6 +8,7 @@ import pytest
 
 from vil_pipeline.clients.bigquery import BigQueryClient
 from vil_pipeline.clients.llm import FakeLLMClient, LLMResponse
+from vil_pipeline.errors import ApiBudgetExceeded
 from vil_pipeline.jobs.extract_entities import extract_entities
 
 MODEL = "fake-model"
@@ -37,6 +38,7 @@ class FakeStore:
 	def __init__(self, rows):
 		self.rows = rows
 		self.results = {}
+		self.starts = []
 		self.runs = []
 		self.saved_entities = []
 
@@ -56,6 +58,9 @@ class FakeStore:
 				self.saved_entities.extend(json.loads(values["entities"]))
 			return []
 		if "INSERT INTO `ops.pipeline_runs`" in sql:
+			self.starts.append(values)
+			return []
+		if "UPDATE `ops.pipeline_runs`" in sql:
 			self.runs.append(values)
 			return []
 		raise AssertionError("Unexpected SQL")
@@ -97,6 +102,8 @@ def test_extract_batches_saves_entities_empty_results_and_skips_on_rerun():
 	assert len(fake.results) == 2
 	assert fake.results[(ID2, "version-1", MODEL)]["status"] == "SUCCESS"
 	assert ID1 in llm.calls[0][1]
+	assert len(fake.starts) == len(fake.runs) == 1
+	assert fake.starts[0]["run_id"] == fake.runs[0]["run_id"] == stats.run_id
 	assert fake.runs[0]["status"] == "SUCCESS"
 	assert json.loads(fake.runs[0]["counts"])["entities"] == 3
 	assert run(bq, FakeLLMClient([])).read == 0
@@ -120,7 +127,8 @@ def test_budget_stops_before_next_article_and_logs_status():
 	assert len(llm.calls) == 1
 	assert len(fake.results) == 1
 	assert fake.runs[0]["status"] == "BUDGET_EXHAUSTED"
-	assert fake.runs[0]["error"]
+	assert fake.runs[0]["error"] == "ApiBudgetExceeded"
+	assert json.loads(fake.runs[0]["counts"])["read"] == 2
 
 
 def test_budget_applies_before_validation_retry():
@@ -130,6 +138,20 @@ def test_budget_applies_before_validation_retry():
 	assert stats.status == "BUDGET_EXHAUSTED"
 	assert len(llm.calls) == 1
 	assert not fake.results
+
+
+def test_budget_exception_does_not_log_its_message():
+	fake, bq = store(ID1)
+
+	def fail_on_read(sql, parameters):
+		if "WITH versions AS" in sql:
+			raise ApiBudgetExceeded("private@example.invalid")
+		return fake.query(sql, parameters)
+
+	bq.query.side_effect = fail_on_read
+	stats = run(bq, FakeLLMClient([]))
+	assert stats.status == "BUDGET_EXHAUSTED"
+	assert fake.runs[0]["error"] == "ApiBudgetExceeded"
 
 
 def test_invalid_wrong_id_and_citation_retry_then_quarantine():
@@ -177,6 +199,7 @@ def test_failure_is_journaled_and_propagated():
 	assert fake.runs[0]["status"] == "FAILED"
 	assert "ValueError" in fake.runs[0]["error"]
 	assert fake.runs[0]["cost"] == Decimal("0.10")
+	assert json.loads(fake.runs[0]["counts"])["calls"] == 1
 	assert not fake.results
 
 
@@ -192,7 +215,7 @@ def test_write_failure_is_journaled_and_propagated():
 	with pytest.raises(RuntimeError, match="write failed"):
 		run(bq, FakeLLMClient([response()]))
 	assert fake.runs[0]["status"] == "FAILED"
-	assert fake.runs[0]["error"] == "RuntimeError: write failed"
+	assert fake.runs[0]["error"] == "RuntimeError"
 	assert json.loads(fake.runs[0]["counts"])["processed"] == 0
 
 
@@ -208,16 +231,19 @@ def test_write_failure_is_journaled_and_propagated():
 	],
 )
 def test_rejects_invalid_configuration(kwargs):
-	_, bq = store(ID1)
+	fake, bq = store(ID1)
 	with pytest.raises(ValueError):
 		run(bq, FakeLLMClient([]), **kwargs)
-	bq.query.assert_not_called()
+	assert len(fake.starts) == len(fake.runs) == 1
+	assert fake.runs[0]["status"] == "FAILED"
+	assert "ValueError" in fake.runs[0]["error"]
+	assert bq.query.call_count == 2
 
 
 def test_selection_queries_active_versions_and_binds_key_and_paging():
 	_, bq = store()
 	run(bq, FakeLLMClient([]))
-	sql, params = bq.query.call_args_list[0].args
+	sql, params = bq.query.call_args_list[1].args
 	assert "v.etat = 'VIGUEUR'" in sql
 	assert "v.date_debut <= CURRENT_DATE()" in sql
 	assert "v.date_fin >= CURRENT_DATE()" in sql

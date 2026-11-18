@@ -74,7 +74,7 @@ def _setup(volumes, candidates, extra_blobs=None):
 	blobs = dict(_volume_blob(k, v) for k, v in volumes.items())
 	blobs.update(extra_blobs or {})
 	bq = Mock(spec=BigQueryClient)
-	bq.query.side_effect = [[{"requete": c} for c in candidates], []]
+	bq.query.side_effect = [[], [{"requete": c} for c in candidates], []]
 	return bq, FakeGCS(blobs), FakeSerpProvider()
 
 
@@ -112,7 +112,12 @@ def test_only_the_top_n_highest_volume_queries_are_fetched_and_archived():
 	assert bq.insert.call_args.args[0] == "ops.couts_api"
 	assert len(bq.insert.call_args.args[1]) == 2
 	run_sql = bq.query.call_args_list[-1].args[0]
-	assert "ops.pipeline_runs" in run_sql and "collect_serp" in run_sql
+	assert "UPDATE `ops.pipeline_runs`" in run_sql
+	start = {p.name: p.value for p in bq.query.call_args_list[0].args[1]}
+	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert bq.query.call_count == 3
+	assert start["run_id"] == finish["run_id"] == stats.run_id
+	assert all(row["lot_id"] == stats.run_id for row in bq.insert.call_args.args[1])
 
 
 def test_fresh_serp_archive_is_not_fetched_again():
@@ -164,12 +169,18 @@ def test_candidates_without_archived_volume_are_reported_not_silently_ignored():
 
 
 @pytest.mark.parametrize("top_n", [0, -1])
-def test_invalid_top_n_fails_before_any_query(top_n):
+def test_invalid_top_n_is_tracked(top_n):
 	bq, gcs, provider = _setup({}, [])
 
 	with pytest.raises(ValueError, match="top_n"):
 		_run(bq, gcs, provider, top_n=top_n)
-	bq.query.assert_not_called()
+	assert bq.query.call_count == 2
+	assert "INSERT INTO `ops.pipeline_runs`" in bq.query.call_args_list[0].args[0]
+	assert "UPDATE `ops.pipeline_runs`" in bq.query.call_args_list[1].args[0]
+	finish = {p.name: p.value for p in bq.query.call_args_list[1].args[1]}
+	assert finish["status"] == "FAILED"
+	assert "top_n" in finish["error"]
+	assert json.loads(finish["counts"])["calls"] == 0
 
 
 def test_cost_is_logged_even_if_archiving_fails(monkeypatch):
@@ -184,4 +195,51 @@ def test_cost_is_logged_even_if_archiving_fails(monkeypatch):
 
 	assert bq.insert.call_args.args[0] == "ops.couts_api"
 	assert bq.insert.call_args.args[1][0]["montant"] == Decimal("0.003")
-	assert "ops.pipeline_runs" in bq.query.call_args_list[-1].args[0]
+	start = {p.name: p.value for p in bq.query.call_args_list[0].args[1]}
+	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert bq.query.call_count == 3
+	assert bq.insert.call_args.args[1][0]["lot_id"] == start["run_id"]
+	assert finish["run_id"] == start["run_id"]
+	assert finish["status"] == "FAILED"
+	assert finish["error"] == "RuntimeError: GCS unavailable"
+	assert finish["cost"] == Decimal("0.003")
+	assert json.loads(finish["counts"])["calls"] == 1
+
+
+@pytest.mark.parametrize(
+	"business_error", [RuntimeError("GCS unavailable"), KeyboardInterrupt()]
+)
+def test_cost_write_failure_is_tracked_and_retains_archive_failure(
+	monkeypatch, business_error
+):
+	bq, gcs, provider = _setup({"a": 100}, ["a"])
+	monkeypatch.setattr(
+		"vil_pipeline.jobs.collect_serp.archive_dataforseo_response",
+		Mock(side_effect=business_error),
+	)
+	cost_error = ValueError("cost write failed")
+	bq.insert.side_effect = cost_error
+
+	with pytest.raises(BaseExceptionGroup) as raised:
+		_run(bq, gcs, provider)
+
+	assert raised.value.exceptions == (business_error, cost_error)
+	assert bq.query.call_count == 3
+	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert finish["status"] == "FAILED"
+	assert "2 sub-exceptions" in finish["error"]
+	assert finish["cost"] == Decimal("0.003")
+	assert json.loads(finish["counts"]) == {
+		"status": "FAILED", "ranked": 1, "selected": 1, "cached": 0, "calls": 1,
+	}
+
+
+def test_cost_write_failure_alone_is_propagated():
+	bq, gcs, provider = _setup({"a": 100}, ["a"])
+	bq.insert.side_effect = ValueError("cost write failed")
+
+	with pytest.raises(ValueError, match="cost write failed"):
+		_run(bq, gcs, provider)
+	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert finish["status"] == "FAILED"
+	assert json.loads(finish["counts"])["calls"] == 1

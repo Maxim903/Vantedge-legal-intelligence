@@ -124,7 +124,7 @@ def test_end_to_end_report_and_parameterized_query(tmp_path):
 	assert "| Titre A (t1) | 1 | 1 | 1 | 1 | 50.00% | 50.00% | 50.00% |" in report
 	assert "| Titre B (t2) | 1 | 1 | 0 | 0 | 100.00% | 100.00% | 100.00% |" in report
 	assert "Articles non annotés exclus : 1" in report
-	sql, parameters = client.query.call_args.args
+	sql, parameters = client.query.call_args_list[1].args
 	assert "ops.extraction_results" in sql
 	assert {p.name: p.value for p in parameters} == {
 		"model": "model", "version_prompt": "prompt-hash",
@@ -162,7 +162,9 @@ def test_missing_or_invalid_annotations_fail_before_query(tmp_path, annotation):
 			client, model="m", version_prompt="v", golden_path=golden,
 			titles_path=titles, output_path=tmp_path / "report.md",
 		)
-	client.query.assert_not_called()
+	assert all(
+		"ops.pipeline_runs" in call.args[0] for call in client.query.call_args_list
+	)
 	assert not (tmp_path / "report.md").exists()
 
 

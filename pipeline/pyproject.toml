@@ -17,6 +17,7 @@ dependencies = [
     "google-cloud-bigquery",
     "google-cloud-storage",
     "lxml",
+    "neo4j>=5.26,<6",
 ]
 
 [project.scripts]
@@ -60,5 +61,5 @@ files = ["src/vil_pipeline"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "."]
+pythonpath = ["src", ".", ".."]
 addopts = "--cov=vil_pipeline --cov-report=term-missing --cov-fail-under=80"

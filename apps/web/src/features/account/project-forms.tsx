@@ -9,7 +9,7 @@ import {
 } from "./project-actions";
 
 const inputClass =
-  "rounded border border-zinc-400 px-2 py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-zinc-900";
+  "rounded border border-zinc-500 px-2 py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:border-zinc-400 dark:bg-zinc-900";
 const buttonClass =
   "rounded border px-3 py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50";
 
@@ -17,7 +17,7 @@ function Feedback({ state }: { state: ProjectActionState }) {
   return (
     <>
       {state.error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {state.error}
         </p>
       )}

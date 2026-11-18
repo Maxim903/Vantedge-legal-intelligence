@@ -13,6 +13,8 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+playwright-report/
+test-results/
 
 # dbt
 target/

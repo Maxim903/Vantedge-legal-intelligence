@@ -110,6 +110,54 @@ def test_migrate_command_propagates_migration_failure(monkeypatch):
 	assert str(result.exception) == "migration échouée"
 
 
+def test_check_graph_consistency_command_reports_mismatches(monkeypatch):
+	from vil_pipeline.jobs.check_graph_consistency import CountDifference
+
+	monkeypatch.setenv("NEO4J_USER", "neo4j")
+	monkeypatch.setenv("NEO4J_PASSWORD", "test-secret")
+	monkeypatch.setattr(cli.bigquery, "Client", Mock())
+	driver = Mock()
+	context = Mock()
+	context.__enter__ = Mock(return_value=driver)
+	context.__exit__ = Mock(return_value=False)
+	factory = Mock(return_value=context)
+	monkeypatch.setattr(cli.GraphDatabase, "driver", factory)
+	check = Mock(return_value=[CountDifference("SE_FONDE_SUR", 2, 3)])
+	monkeypatch.setattr(cli, "check_graph_consistency", check)
+	args = [
+		"check-graph-consistency", "--project-id", "test-project",
+		"--neo4j-uri", "bolt://localhost:7687", "--dataset", "test_marts",
+	]
+	result = runner.invoke(cli.app, args)
+	assert result.exit_code == 1
+	assert "SE_FONDE_SUR : marts=2, Neo4j=3" in result.output
+	assert "test-secret" not in result.output
+	assert check.call_args.args[2].dataset_id == "test_marts"
+	context.__exit__.assert_called_once()
+
+	check.return_value = []
+	result = runner.invoke(cli.app, args)
+	assert result.exit_code == 0
+	assert "cohérents" in result.output
+
+	check.side_effect = RuntimeError("BigQuery indisponible")
+	result = runner.invoke(cli.app, args)
+	assert result.exit_code == 1
+	assert "Contrôle impossible" in result.output
+	assert "BigQuery indisponible" in result.output
+
+
+def test_check_graph_consistency_requires_neo4j_credentials(monkeypatch):
+	monkeypatch.delenv("NEO4J_USER", raising=False)
+	monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+	result = runner.invoke(cli.app, [
+		"check-graph-consistency", "--project-id", "test-project",
+		"--neo4j-uri", "bolt://localhost:7687",
+	])
+	assert result.exit_code != 0
+	assert "NEO4J_USER et NEO4J_PASSWORD" in result.output
+
+
 def test_extract_entities_dry_run_does_not_create_llm(monkeypatch):
 	from decimal import Decimal
 

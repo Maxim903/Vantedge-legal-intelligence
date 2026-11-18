@@ -171,7 +171,7 @@ export async function HistorySection({ userId }: { userId: string }) {
     const [analyses, projects] = await Promise.all([
       supabase
         .from("analyses")
-        .select("id, project_id, created_at, parametres")
+        .select("id, project_id, created_at, parametres, quota_verifie")
         .eq("user_id", userId)
         .order("created_at", { ascending: false }),
       supabase.from("projects").select("id, nom").eq("user_id", userId),
@@ -212,6 +212,19 @@ export async function HistorySection({ userId }: { userId: string }) {
                   UTC
                 </time>
               </p>
+              {analysis.quota_verifie &&
+                typeof analysis.parametres === "object" &&
+                analysis.parametres !== null &&
+                "notion_id" in analysis.parametres &&
+                typeof analysis.parametres.notion_id === "string" &&
+                analysis.parametres.notion_id.length > 0 && (
+                  <Link
+                    className={linkClass}
+                    href={`/app/analyse/${encodeURIComponent(analysis.parametres.notion_id)}?projet=${encodeURIComponent(analysis.project_id)}`}
+                  >
+                    Ouvrir cette analyse
+                  </Link>
+                )}
               <details>
                 <summary className="cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
                   Paramètres de l’analyse

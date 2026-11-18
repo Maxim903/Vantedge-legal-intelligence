@@ -1,6 +1,7 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { CheckoutButton } from "./checkout-button";
 import { PortalButton } from "./portal-button";
 
 export async function Subscription() {
@@ -26,7 +27,13 @@ export async function Subscription() {
       </p>
     );
   }
-  if (!subscription) return <p>Vous n’avez pas encore d’abonnement.</p>;
+  if (!subscription)
+    return (
+      <div className="space-y-4">
+        <p>Vous n’avez pas encore d’abonnement.</p>
+        <CheckoutButton />
+      </div>
+    );
 
   const periodEnd = subscription.periode_fin
     ? new Date(subscription.periode_fin)
@@ -53,6 +60,9 @@ export async function Subscription() {
         </div>
       </dl>
       <PortalButton />
+      {!["trialing", "active", "past_due"].includes(subscription.statut) && (
+        <CheckoutButton />
+      )}
     </div>
   );
 }

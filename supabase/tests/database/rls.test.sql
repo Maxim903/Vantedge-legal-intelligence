@@ -1,5 +1,5 @@
 begin;
-select plan(37);
+select plan(39);
 
 -- Jeu de données (rôle postgres, la RLS est contournée).
 insert into auth.users (id, email) values
@@ -44,13 +44,15 @@ select lives_ok($$update public.profiles set display_name = 'piraté' where id =
 select lives_ok($$delete from public.profiles where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'$$, 'A supprime le profil de B sans erreur');
 select lives_ok($$update public.projects set nom = 'piraté' where id = 'b1111111-1111-1111-1111-111111111111'$$, 'A met à jour le projet de B sans erreur');
 select lives_ok($$delete from public.projects where id = 'b1111111-1111-1111-1111-111111111111'$$, 'A supprime le projet de B sans erreur');
-select lives_ok($$update public.analyses set parametres = '{"q": "piraté"}' where id = 'b2222222-2222-2222-2222-222222222222'$$, 'A met à jour l''analyse de B sans erreur');
+select throws_ok($$update public.analyses set parametres = '{"q": "piraté"}' where id = 'b2222222-2222-2222-2222-222222222222'$$, '42501', null, 'A ne modifie pas les analyses');
 select lives_ok($$delete from public.analyses where id = 'b2222222-2222-2222-2222-222222222222'$$, 'A supprime l''analyse de B sans erreur');
 
 -- Insertion au nom de B : refusée.
 select throws_ok($$insert into public.projects (user_id, nom) values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'x')$$, '42501', null, 'A ne crée pas de projet pour B');
 select throws_ok($$insert into public.analyses (project_id, user_id) values ('b1111111-1111-1111-1111-111111111111', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')$$, '42501', null, 'A ne crée pas d''analyse pour B');
-select throws_ok($$insert into public.analyses (project_id, user_id) values ('b1111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')$$, '23503', null, 'A ne rattache pas une analyse au projet de B');
+select throws_ok($$insert into public.analyses (project_id, user_id) values ('b1111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')$$, '42501', null, 'A ne crée pas directement une analyse');
+select throws_ok($$insert into public.analyses (project_id, user_id, parametres) values ('a1111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '{"notion_id":"n"}')$$, '42501', null, 'A ne peut pas forger sa propre analyse');
+select throws_ok($$update public.analyses set parametres = '{"notion_id":"n"}' where id = 'a2222222-2222-2222-2222-222222222222'$$, '42501', null, 'A ne peut pas modifier son analyse');
 select throws_ok($$insert into public.profiles (id) values (gen_random_uuid())$$, '42501', null, 'A ne crée pas de profil');
 
 -- Écriture réservée au rôle service.

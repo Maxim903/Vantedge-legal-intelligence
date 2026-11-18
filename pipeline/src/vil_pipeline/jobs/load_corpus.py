@@ -20,6 +20,7 @@ from vil_pipeline.errors import ExtractionError
 from vil_pipeline.logging import configure_logging
 from vil_pipeline.models.corpus import Article, ArticleVersion
 from vil_pipeline.parsers.legi import parse_legi_article
+from vil_pipeline.tracking import TrackedRun, tracked_run
 
 DEFAULT_CODE_ID = "LEGITEXT000006072050"
 _STAGING_SCHEMA = [
@@ -212,9 +213,36 @@ def load_corpus(
 	logger: structlog.stdlib.BoundLogger | None = None,
 ) -> LoadStats:
 	"""Load matching corpus records through a temporary table and idempotent MERGEs."""
-	log = logger or configure_logging(run_id=str(uuid4()), job="load_corpus")
+	project_id = project_id or os.environ.get("GCP_PROJECT_ID")
+	if client is None:
+		if not project_id:
+			raise ValueError("GCP_PROJECT_ID or project_id is required for tracking")
+		client = BigQueryClient(project_id, os.environ.get("BQ_LOCATION"))
+	with tracked_run(client, "load_corpus") as run:
+		run.status = "DRY_RUN" if dry_run else "SUCCESS"
+		run.counts = {"read": 0, "inserted": 0, "updated": 0, "ignored": 0}
+		log = logger or configure_logging(run_id=run.run_id, job="load_corpus")
+		return _load_corpus(
+			source, livre=livre, project_id=project_id, client=client,
+			dry_run=dry_run, log=log, run=run,
+		)
+
+
+def _load_corpus(
+	source: str | Path,
+	*,
+	livre: str,
+	project_id: str | None,
+	client: BigQueryClient,
+	dry_run: bool,
+	log: structlog.stdlib.BoundLogger,
+	run: TrackedRun,
+) -> LoadStats:
 	if dry_run:
-		count = sum(1 for _ in iter_corpus(source, livre=livre))
+		count = 0
+		for _ in iter_corpus(source, livre=livre):
+			count += 1
+			run.counts["read"] = count
 		stats = LoadStats(read=count, inserted=0, updated=0, ignored=0)
 		log.info(
 			"corpus_load_complete",
@@ -226,7 +254,6 @@ def load_corpus(
 		)
 		return stats
 
-	project_id = project_id or os.environ.get("GCP_PROJECT_ID")
 	if not project_id:
 		raise ValueError("GCP_PROJECT_ID or project_id is required")
 
@@ -240,6 +267,7 @@ def load_corpus(
 		nonlocal read_count
 		for article, version in iter_corpus(source, livre=livre):
 			read_count += 1
+			run.counts["read"] = read_count
 			yield {
 				"article_id": article.article_id,
 				"article_version_id": version.article_version_id,
@@ -275,9 +303,6 @@ def load_corpus(
 		)
 		return stats
 
-	if client is None:
-		client = BigQueryClient(project_id, os.environ.get("BQ_LOCATION"))
-
 	try:
 		client.insert(
 			staging_table,
@@ -303,6 +328,10 @@ def load_corpus(
 		updated=updated,
 		ignored=read_count - inserted - updated,
 	)
+	run.counts.update(
+		read=stats.read, inserted=stats.inserted,
+		updated=stats.updated, ignored=stats.ignored,
+	)
 	log.info(
 		"corpus_load_complete",
 		articles_lus=stats.read,
@@ -326,7 +355,7 @@ def main() -> None:
 	parser.add_argument(
 		"--dry-run",
 		action="store_true",
-		help="Parse and count matching articles without accessing BigQuery.",
+		help="Parse and count matching articles; only the execution log is written.",
 	)
 	args = parser.parse_args()
 

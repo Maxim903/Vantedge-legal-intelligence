@@ -1,12 +1,10 @@
 """Load archived DataForSEO responses from GCS into the raw BigQuery tables."""
 
-import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import PurePosixPath
 from typing import Any, cast
-from uuid import uuid4
 
 from google.cloud import bigquery
 from google.cloud.bigquery import QueryJob, ScalarQueryParameter
@@ -16,18 +14,13 @@ from vil_pipeline.clients.bigquery import BigQueryClient
 from vil_pipeline.clients.gcs import GCSClient
 from vil_pipeline.jobs.collect_serp import SERP_ENDPOINT
 from vil_pipeline.jobs.collect_volumes import ENDPOINT as VOLUME_ENDPOINT
+from vil_pipeline.tracking import tracked_run
 
 INTENT_ENDPOINT = "dataforseo_labs/google/search_intent/live"
 
 _APPEND = cast(WriteDisposition, bigquery.WriteDisposition.WRITE_APPEND)
 _LOADED_SQL = "SELECT archive_blob FROM `ops.archives_chargees`"
-_RUN_SQL = """
-INSERT INTO `ops.pipeline_runs`
-  (run_id, job, debut, fin, statut, compteurs, erreur, cout_estime)
-VALUES
-  (@run_id, 'load_raw_market', @debut, @fin, @statut,
-   PARSE_JSON(@compteurs), @erreur, NULL)
-"""
+
 
 _COMMON_FIELDS = [
 	bigquery.SchemaField("archive_blob", "STRING", mode="REQUIRED"),
@@ -194,80 +187,68 @@ def load_raw_market(
 	loaded; rows left by an interrupted attempt are deleted before reloading,
 	so the job can be re-run safely.
 	"""
-	run_id = str(uuid4())
-	started = datetime.now(UTC)
-	status = "SUCCESS"
-	error_message: str | None = None
 	found = loaded = row_count = 0
 
-	try:
-		query_result = client.query(_LOADED_SQL)
-		if isinstance(query_result, QueryJob):
-			raise ValueError("Le client BigQuery ne doit pas être en mode dry-run")
-		done = {row["archive_blob"] for row in query_result}
+	with tracked_run(client, "load_raw_market") as run:
+		try:
+			query_result = client.query(_LOADED_SQL)
+			if isinstance(query_result, QueryJob):
+				raise ValueError("Le client BigQuery ne doit pas être en mode dry-run")
+			done = {row["archive_blob"] for row in query_result}
 
-		pending: list[tuple[str, str]] = []
-		for endpoint in _TARGETS:
-			prefix = f"dataforseo/{endpoint}/"
-			pending.extend(
-				(endpoint, name)
-				for name in sorted(gcs.list_blob_names(prefix))
-				if name.endswith(".json") and name not in done
-			)
-		found = len(pending)
+			pending: list[tuple[str, str]] = []
+			for endpoint in _TARGETS:
+				prefix = f"dataforseo/{endpoint}/"
+				pending.extend(
+					(endpoint, name)
+					for name in sorted(gcs.list_blob_names(prefix))
+					if name.endswith(".json") and name not in done
+				)
+			found = len(pending)
 
-		if dry_run:
-			status = "DRY_RUN"
-		for endpoint, blob_name in [] if dry_run else pending:
-			target = _TARGETS[endpoint]
-			base = {
-				"archive_blob": blob_name,
-				"date_archive": _archive_date(blob_name).isoformat(),
-			}
-			rows = list(target.rows(gcs.download_json(blob_name), base))
-			client.query(
-				f"DELETE FROM `{target.table}` WHERE archive_blob = @blob",  # noqa: S608
-				[ScalarQueryParameter("blob", "STRING", blob_name)],
-			)
-			if rows:
+			if dry_run:
+				run.status = "DRY_RUN"
+			for endpoint, blob_name in [] if dry_run else pending:
+				target = _TARGETS[endpoint]
+				base = {
+					"archive_blob": blob_name,
+					"date_archive": _archive_date(blob_name).isoformat(),
+				}
+				rows = list(target.rows(gcs.download_json(blob_name), base))
+				client.query(
+					f"DELETE FROM `{target.table}` WHERE archive_blob = @blob",  # noqa: S608
+					[ScalarQueryParameter("blob", "STRING", blob_name)],
+				)
+				if rows:
+					client.insert(
+						target.table,
+						rows,
+						schema=target.schema,
+						write_disposition=_APPEND,
+					)
 				client.insert(
-					target.table,
-					rows,
-					schema=target.schema,
+					"ops.archives_chargees",
+					[{
+						"archive_blob": blob_name,
+						"endpoint": endpoint,
+						"table_cible": target.table,
+						"lignes": len(rows),
+						"run_id": run.run_id,
+						"date_chargement": datetime.now(UTC).isoformat(),
+					}],
+					schema=_LOADED_SCHEMA,
 					write_disposition=_APPEND,
 				)
-			client.insert(
-				"ops.archives_chargees",
-				[{
-					"archive_blob": blob_name,
-					"endpoint": endpoint,
-					"table_cible": target.table,
-					"lignes": len(rows),
-					"run_id": run_id,
-					"date_chargement": datetime.now(UTC).isoformat(),
-				}],
-				schema=_LOADED_SCHEMA,
-				write_disposition=_APPEND,
-			)
-			loaded += 1
-			row_count += len(rows)
-	except Exception as error:
-		status = "FAILED"
-		error_message = f"{type(error).__name__}: {error}"
-		raise
-	finally:
-		counts = {
-			"status": status,
-			"archives_found": found,
-			"archives_loaded": loaded,
-			"rows_loaded": row_count,
-		}
-		client.query(_RUN_SQL, [
-			ScalarQueryParameter("run_id", "STRING", run_id),
-			ScalarQueryParameter("debut", "TIMESTAMP", started),
-			ScalarQueryParameter("fin", "TIMESTAMP", datetime.now(UTC)),
-			ScalarQueryParameter("statut", "STRING", status),
-			ScalarQueryParameter("compteurs", "STRING", json.dumps(counts)),
-			ScalarQueryParameter("erreur", "STRING", error_message),
-		])
-	return RawMarketLoadStats(run_id, status, found, loaded, row_count)
+				loaded += 1
+				row_count += len(rows)
+		except BaseException:
+			run.status = "FAILED"
+			raise
+		finally:
+			run.counts = {
+				"status": run.status,
+				"archives_found": found,
+				"archives_loaded": loaded,
+				"rows_loaded": row_count,
+			}
+	return RawMarketLoadStats(run.run_id, run.status, found, loaded, row_count)

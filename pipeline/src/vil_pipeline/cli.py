@@ -7,6 +7,7 @@ from time import perf_counter
 
 import typer
 from google.cloud import bigquery
+from neo4j import GraphDatabase
 from pydantic import SecretStr
 
 from prompts.loader import load_prompt
@@ -15,6 +16,7 @@ from vil_pipeline.clients.bigquery import BigQueryClient
 from vil_pipeline.clients.dataforseo import DataForSEOClient
 from vil_pipeline.clients.gcs import GCSClient
 from vil_pipeline.clients.llm_gemini import GeminiLLMClient
+from vil_pipeline.jobs.check_graph_consistency import check_graph_consistency
 from vil_pipeline.jobs.collect_intent import (
 	IntentCollectionStats,
 	collect_intent,
@@ -340,6 +342,42 @@ def import_review_command(
 	"""Importe atomiquement les décisions du CSV de revue."""
 	count = import_review(BigQueryClient(project_id, location), source)
 	typer.echo(f"Décisions importées : {count}")
+
+
+@app.command("check-graph-consistency")
+def check_graph_consistency_command(
+	project_id: str = typer.Option(..., "--project-id", envvar="GCP_PROJECT_ID"),
+	dataset: str = typer.Option("marts", "--dataset", envvar="BQ_MARTS_DATASET"),
+	location: str | None = typer.Option(None, "--location", envvar="BQ_LOCATION"),
+	uri: str = typer.Option(..., "--neo4j-uri", envvar="NEO4J_URI"),
+	database: str | None = typer.Option(
+		None, "--neo4j-database", envvar="NEO4J_DATABASE"
+	),
+) -> None:
+	"""Compare les comptes des marts et du graphe Neo4j."""
+	user = os.environ.get("NEO4J_USER")
+	password = os.environ.get("NEO4J_PASSWORD")
+	if not user or not user.strip() or not password or not password.strip():
+		raise typer.BadParameter("NEO4J_USER et NEO4J_PASSWORD sont nécessaires.")
+	try:
+		client = bigquery.Client(project=project_id, location=location)
+		with GraphDatabase.driver(uri, auth=(user, password)) as driver:
+			differences = check_graph_consistency(
+				client, driver, bigquery.DatasetReference(project_id, dataset),
+				database=database,
+			)
+	except Exception as error:
+		typer.echo(f"Contrôle impossible : {type(error).__name__}: {error}", err=True)
+		raise typer.Exit(code=1) from error
+	if differences:
+		typer.echo("Écarts entre les marts et Neo4j :", err=True)
+		for item in differences:
+			typer.echo(
+				f"- {item.category} : marts={item.marts}, Neo4j={item.neo4j}",
+				err=True,
+			)
+		raise typer.Exit(code=1)
+	typer.echo("Comptes des marts et de Neo4j cohérents.")
 
 
 def main() -> None:

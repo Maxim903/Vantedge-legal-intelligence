@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from vil_pipeline.clients.bigquery import BigQueryClient
 from vil_pipeline.jobs.collect_serp import SERP_ENDPOINT
 from vil_pipeline.jobs.collect_volumes import ENDPOINT as VOLUME_ENDPOINT
 from vil_pipeline.jobs.load_raw_market import INTENT_ENDPOINT, load_raw_market
@@ -23,14 +24,20 @@ class FakeGCS:
 		return self.blobs[name]
 
 
-class FakeBigQuery:
+class FakeBigQuery(BigQueryClient):
 	"""Keeps loaded tables in memory; ops.archives_chargees feeds the next run."""
 
 	def __init__(self):
 		self.tables = {}
 		self.fail_on = None
+		self.starts = []
+		self.runs = []
 
 	def query(self, sql, parameters=()):
+		if "INSERT INTO `ops.pipeline_runs`" in sql:
+			self.starts.append({p.name: p.value for p in parameters})
+		elif "UPDATE `ops.pipeline_runs`" in sql:
+			self.runs.append({p.name: p.value for p in parameters})
 		if "FROM `ops.archives_chargees`" in sql:
 			return list(self.tables.get("ops.archives_chargees", []))
 		if sql.lstrip().startswith("DELETE FROM"):
@@ -68,6 +75,8 @@ def test_loads_each_endpoint_into_its_raw_table_and_records_archives():
 
 	stats = load_raw_market(bq, gcs)
 
+	assert len(bq.starts) == len(bq.runs) == 1
+	assert bq.starts[0]["run_id"] == bq.runs[0]["run_id"] == stats.run_id
 	assert stats.status == "SUCCESS"
 	assert stats.archives_loaded == 4
 	volumes = bq.tables["raw.dataforseo_volumes"]
@@ -86,6 +95,9 @@ def test_loads_each_endpoint_into_its_raw_table_and_records_archives():
 		"probabilite": 0.9,
 	}]
 	assert len(bq.tables["ops.archives_chargees"]) == 4
+	assert all(
+		row["run_id"] == stats.run_id for row in bq.tables["ops.archives_chargees"]
+	)
 
 
 def test_second_run_loads_nothing():
@@ -118,6 +130,9 @@ def test_failed_load_is_not_recorded_and_retried_without_duplicates():
 	bq.fail_on = "raw.dataforseo_serp"
 	with pytest.raises(RuntimeError):
 		load_raw_market(bq, gcs)
+	assert bq.runs[-1]["status"] == "FAILED"
+	assert "load failed" in bq.runs[-1]["error"]
+	assert json.loads(bq.runs[-1]["counts"])["archives_loaded"] == 2
 	bq.fail_on = None
 	recorded = {r["archive_blob"] for r in bq.tables["ops.archives_chargees"]}
 	assert not any(SERP_ENDPOINT in blob for blob in recorded)

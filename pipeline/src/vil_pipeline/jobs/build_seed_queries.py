@@ -11,6 +11,7 @@ from google.cloud.bigquery import QueryJob
 from google.cloud.bigquery.job import WriteDisposition
 
 from vil_pipeline.clients.bigquery import BigQueryClient
+from vil_pipeline.tracking import tracked_run
 
 _VALIDATED_NOTIONS_SQL = """
 SELECT DISTINCT notion_libelle, situation_de_vie
@@ -103,18 +104,21 @@ def generate_seed_queries(
 
 def build_seed_queries(client: BigQueryClient) -> int:
 	"""Rebuild raw.requetes_candidates from validated extracted notions."""
-	result = client.query(_VALIDATED_NOTIONS_SQL)
-	if isinstance(result, QueryJob):
-		raise ValueError("Le client BigQuery ne doit pas être en mode dry-run")
-	rows = generate_seed_queries(result)
-	if not rows:
-		return 0
-	client.insert(
-		"raw.requetes_candidates",
-		rows,
-		schema=_SEED_SCHEMA,
-		write_disposition=cast(
-			WriteDisposition, bigquery.WriteDisposition.WRITE_TRUNCATE
-		),
-	)
-	return len(rows)
+	with tracked_run(client, "build_seed_queries") as run:
+		run.counts["generated"] = 0
+		result = client.query(_VALIDATED_NOTIONS_SQL)
+		if isinstance(result, QueryJob):
+			raise ValueError("Le client BigQuery ne doit pas être en mode dry-run")
+		rows = generate_seed_queries(result)
+		run.counts["generated"] = len(rows)
+		if not rows:
+			return 0
+		client.insert(
+			"raw.requetes_candidates",
+			rows,
+			schema=_SEED_SCHEMA,
+			write_disposition=cast(
+				WriteDisposition, bigquery.WriteDisposition.WRITE_TRUNCATE
+			),
+		)
+		return len(rows)

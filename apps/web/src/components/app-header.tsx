@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import { NavLink } from "@/components/nav-link";
 
@@ -18,9 +19,25 @@ export function AppHeader() {
           aria-label="Navigation principale"
           className="flex flex-wrap items-center gap-1"
         >
-          <NavLink href="/app/compte">Mon compte</NavLink>
-          <NavLink href="/app/projets">Projets</NavLink>
-          <NavLink href="/app/analyse">Analyse loi vs marché</NavLink>
+          <Suspense
+            fallback={
+              <>
+                <Link href="/app/compte" className="rounded px-2 py-1 text-sm">
+                  Mon compte
+                </Link>
+                <Link href="/app/projets" className="rounded px-2 py-1 text-sm">
+                  Projets
+                </Link>
+                <Link href="/app/analyse" className="rounded px-2 py-1 text-sm">
+                  Analyse loi vs marché
+                </Link>
+              </>
+            }
+          >
+            <NavLink href="/app/compte">Mon compte</NavLink>
+            <NavLink href="/app/projets">Projets</NavLink>
+            <NavLink href="/app/analyse">Analyse loi vs marché</NavLink>
+          </Suspense>
           <SignOutButton />
         </nav>
       </div>

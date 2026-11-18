@@ -61,6 +61,10 @@ def test_main_exposes_configurable_livre_parameter(tmp_path, monkeypatch, capsys
 		"sys.argv",
 		["load_corpus", str(source), "--livre", "II", "--dry-run"],
 	)
+	client = Mock(spec=BigQueryClient)
+	monkeypatch.setattr(
+		"vil_pipeline.jobs.load_corpus.BigQueryClient", Mock(return_value=client)
+	)
 
 	main()
 
@@ -69,8 +73,9 @@ def test_main_exposes_configurable_livre_parameter(tmp_path, monkeypatch, capsys
 	assert output["dry_run"] is True
 
 
-def test_dry_run_counts_matching_records_without_cloud_access(capsys):
-	stats = load_corpus(FIXTURES_DIR, livre="II", dry_run=True)
+def test_dry_run_counts_matching_records_and_only_writes_tracking(capsys):
+	client = Mock(spec=BigQueryClient)
+	stats = load_corpus(FIXTURES_DIR, livre="II", dry_run=True, client=client)
 
 	assert stats.read == 2
 	assert stats.inserted == 0
@@ -80,6 +85,8 @@ def test_dry_run_counts_matching_records_without_cloud_access(capsys):
 	assert log["event"] == "corpus_load_complete"
 	assert log["articles_lus"] == 2
 	assert log["dry_run"] is True
+	assert client.query.call_count == 2
+	client.insert.assert_not_called()
 
 
 def test_load_uses_temporary_table_and_merges_with_dml_counts(tmp_path):
@@ -201,7 +208,7 @@ def test_merge_counts_unchanged_versions_as_ignored(tmp_path):
 	assert stats.ignored == 1
 
 
-def test_main_dry_run_does_not_create_bigquery_client(
+def test_main_dry_run_creates_client_for_tracking(
 	tmp_path,
 	monkeypatch,
 	capsys,
@@ -212,12 +219,15 @@ def test_main_dry_run_does_not_create_bigquery_client(
 		"sys.argv",
 		["load_corpus", str(fixture), "--livre", "II", "--dry-run"],
 	)
-	client_factory = Mock()
-	monkeypatch.setattr(BigQueryClient, "__init__", client_factory)
+	client = Mock(spec=BigQueryClient)
+	client_factory = Mock(return_value=client)
+	monkeypatch.setattr("vil_pipeline.jobs.load_corpus.BigQueryClient", client_factory)
 
 	main()
 
-	client_factory.assert_not_called()
+	client_factory.assert_called_once()
+	assert client.query.call_count == 2
+	client.insert.assert_not_called()
 	log = json.loads(capsys.readouterr().out)
 	assert log["articles_lus"] == 1
 	assert log["articles_inseres"] == 0
@@ -225,14 +235,14 @@ def test_main_dry_run_does_not_create_bigquery_client(
 	assert log["articles_ignores"] == 0
 
 
-def test_empty_corpus_does_not_create_staging_table_or_client(tmp_path, monkeypatch):
-	client_factory = Mock()
-	monkeypatch.setattr(BigQueryClient, "__init__", client_factory)
+def test_empty_corpus_is_tracked_without_creating_staging_table(tmp_path):
+	client = Mock(spec=BigQueryClient)
 
-	stats = load_corpus(tmp_path, project_id="test-project")
+	stats = load_corpus(tmp_path, project_id="test-project", client=client)
 
 	assert stats.read == 0
 	assert stats.inserted == 0
 	assert stats.updated == 0
 	assert stats.ignored == 0
-	client_factory.assert_not_called()
+	assert client.query.call_count == 2
+	client.insert.assert_not_called()

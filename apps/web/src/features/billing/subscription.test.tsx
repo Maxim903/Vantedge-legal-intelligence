@@ -49,7 +49,9 @@ describe("Subscription", () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
     const view = render(await Subscription());
     expect(screen.getByText(/pas encore d’abonnement/)).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Souscrire au plan pro" }),
+    ).toBeInTheDocument();
     view.unmount();
     vi.spyOn(console, "error").mockImplementation(() => {});
     maybeSingle.mockResolvedValue({ data: null, error: { message: "DB" } });
@@ -66,6 +68,9 @@ describe("Subscription", () => {
     });
     render(await Subscription());
     expect(screen.getByText("Non disponible")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Souscrire au plan pro" }),
+    ).toBeInTheDocument();
   });
 
   it("redirige si la session a expiré", async () => {

@@ -1,9 +1,12 @@
 """Volume collection tests with BigQuery, GCS and DataForSEO doubles."""
 
+import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock
+
+import pytest
 
 from vil_pipeline.clients.bigquery import BigQueryClient
 from vil_pipeline.clients.dataforseo import SearchVolumeResponse
@@ -41,7 +44,7 @@ class FakeDataForSEOClient:
 
 def _clients(rows, blob_names=()):
 	bq = Mock(spec=BigQueryClient)
-	bq.query.side_effect = [rows, []]
+	bq.query.side_effect = [[], rows, []]
 	gcs = Mock(spec=GCSClient)
 	gcs.list_blob_names.return_value = list(blob_names)
 	api = FakeDataForSEOClient()
@@ -108,6 +111,11 @@ def test_collection_stops_before_budget_exceeded_and_logs_call_cost():
 	assert cost_row["montant"] == Decimal("0.075")
 	assert cost_row["details"]["mot_cle"] == "buy laptop"
 	assert "ops.pipeline_runs" in bq.query.call_args_list[-1].args[0]
+	assert bq.query.call_count == 3
+	start = {p.name: p.value for p in bq.query.call_args_list[0].args[1]}
+	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert start["run_id"] == finish["run_id"] == stats.run_id
+	assert finish["status"] == "BUDGET_EXHAUSTED"
 
 
 def test_cost_is_logged_even_if_gcs_archiving_fails(monkeypatch):
@@ -135,4 +143,54 @@ def test_cost_is_logged_even_if_gcs_archiving_fails(monkeypatch):
 
 	assert bq.insert.call_args.args[0] == "ops.couts_api"
 	assert bq.insert.call_args.args[1][0]["montant"] == Decimal("0.075")
-	assert "ops.pipeline_runs" in bq.query.call_args_list[-1].args[0]
+	start = {p.name: p.value for p in bq.query.call_args_list[0].args[1]}
+	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert bq.query.call_count == 3
+	assert bq.insert.call_args.args[1][0]["lot_id"] == start["run_id"]
+	assert finish["run_id"] == start["run_id"]
+	assert finish["status"] == "FAILED"
+	assert finish["error"] == "RuntimeError: GCS unavailable"
+	assert finish["cost"] == Decimal("0.075")
+	assert json.loads(finish["counts"])["calls"] == 1
+
+
+@pytest.mark.parametrize(
+	"business_error", [RuntimeError("GCS unavailable"), KeyboardInterrupt()]
+)
+def test_cost_write_failure_is_tracked_and_retains_archive_failure(
+	monkeypatch, business_error
+):
+	bq, gcs, api = _clients([{"requete": "buy laptop"}])
+	monkeypatch.setattr(
+		"vil_pipeline.jobs.collect_volumes.archive_dataforseo_response",
+		Mock(side_effect=business_error),
+	)
+	cost_error = ValueError("cost write failed")
+	bq.insert.side_effect = cost_error
+
+	with pytest.raises(BaseExceptionGroup) as raised:
+		collect_volumes(
+			bq, gcs, api, max_cost=Decimal("0.10"), cost_per_call=Decimal("0.075"),
+		)
+	assert raised.value.exceptions == (business_error, cost_error)
+	assert bq.query.call_count == 3
+	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert finish["status"] == "FAILED"
+	assert "2 sub-exceptions" in finish["error"]
+	assert finish["cost"] == Decimal("0.075")
+	assert json.loads(finish["counts"]) == {
+		"status": "FAILED", "read": 1, "cached": 0, "calls": 1,
+	}
+
+
+def test_cost_write_failure_alone_is_propagated():
+	bq, gcs, api = _clients([{"requete": "buy laptop"}])
+	bq.insert.side_effect = ValueError("cost write failed")
+
+	with pytest.raises(ValueError, match="cost write failed"):
+		collect_volumes(
+			bq, gcs, api, max_cost=Decimal("0.10"), cost_per_call=Decimal("0.075"),
+		)
+	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert finish["status"] == "FAILED"
+	assert json.loads(finish["counts"])["calls"] == 1

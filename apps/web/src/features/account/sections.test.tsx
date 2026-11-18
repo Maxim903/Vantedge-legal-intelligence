@@ -105,6 +105,34 @@ describe("blocs du compte", () => {
     ).toHaveAttribute("href", "/app/analyse");
   });
 
+  it("permet de rouvrir une analyse enregistrée dans son projet", async () => {
+    mocks.order.mockResolvedValue({
+      data: [
+        {
+          id: "analyse-1",
+          project_id: "11111111-1111-4111-8111-111111111111",
+          created_at: "2026-11-16T12:30:00Z",
+          parametres: { notion_id: "notion-1" },
+          quota_verifie: true,
+        },
+      ],
+      error: null,
+    });
+    mocks.eq
+      .mockReturnValueOnce({ order: mocks.order })
+      .mockResolvedValueOnce({
+        data: [{ id: "11111111-1111-4111-8111-111111111111", nom: "Projet A" }],
+        error: null,
+      });
+    render(await HistorySection({ userId }));
+    expect(
+      screen.getByRole("link", { name: "Ouvrir cette analyse" }),
+    ).toHaveAttribute(
+      "href",
+      "/app/analyse/notion-1?projet=11111111-1111-4111-8111-111111111111",
+    );
+  });
+
   it("affiche les analyses et le nom du projet associé", async () => {
     mocks.order.mockResolvedValue({
       data: [
@@ -117,12 +145,10 @@ describe("blocs du compte", () => {
       ],
       error: null,
     });
-    mocks.eq
-      .mockReturnValueOnce({ order: mocks.order })
-      .mockResolvedValueOnce({
-        data: [{ id: "projet-1", nom: "Projet A" }],
-        error: null,
-      });
+    mocks.eq.mockReturnValueOnce({ order: mocks.order }).mockResolvedValueOnce({
+      data: [{ id: "projet-1", nom: "Projet A" }],
+      error: null,
+    });
     render(await HistorySection({ userId }));
     expect(screen.getByText("Projet A")).toBeInTheDocument();
     expect(screen.getByText(/2026-11-16 12:30/)).toBeInTheDocument();

@@ -1794,6 +1794,18 @@ wheels = [
 ]
 
 [[package]]
+name = "neo4j"
+version = "5.28.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5d/e2/62b2ced8591abf5aabb4bce6160dacb75e53992875ee6aec03fb5ea2dc0d/neo4j-5.28.8.tar.gz", hash = "sha256:b2531e5fb618bd1b0f5f3d62b5f9be480a66969396f82c41caaf2f3539f7e72c", size = 234107, upload-time = "2026-10-15T11:02:32.284Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/34/5b/c3a3fc2604cd578c27f8d36de7973093ebc7c148f749be9db067dd63a00a/neo4j-5.28.8-py3-none-any.whl", hash = "sha256:f8ecdad94be88f0f7a766a284a9a7023db9e7bd92d1b0a4fe6d6e191feb97f91", size = 314703, upload-time = "2026-10-15T11:02:29.605Z" },
+]
+
+[[package]]
 name = "networkx"
 version = "3.7"
 source = { registry = "https://pypi.org/simple" }
@@ -2925,6 +2937,7 @@ dependencies = [
     { name = "google-cloud-storage" },
     { name = "httpx" },
     { name = "lxml" },
+    { name = "neo4j" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "structlog" },
@@ -2952,6 +2965,7 @@ requires-dist = [
     { name = "httpx" },
     { name = "lxml" },
     { name = "mypy", marker = "extra == 'dev'" },
+    { name = "neo4j", specifier = ">=5.26,<6" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pytest", marker = "extra == 'dev'" },

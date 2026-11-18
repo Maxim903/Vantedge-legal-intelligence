@@ -48,12 +48,12 @@ export function PortalButton() {
         type="button"
         onClick={openPortal}
         disabled={pending}
-        className="rounded border border-zinc-300 px-4 py-2 hover:bg-black/[.06] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-white/[.08]"
+        className="rounded border border-zinc-500 px-4 py-2 hover:bg-black/[.06] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 dark:border-zinc-400 dark:hover:bg-white/[.08]"
       >
         {pending ? "Ouverture…" : "Gérer mon abonnement"}
       </button>
       {error && (
-        <p role="alert" className="mt-2 text-sm text-red-600">
+        <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
           {error}
         </p>
       )}

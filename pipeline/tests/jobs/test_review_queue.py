@@ -42,7 +42,7 @@ def test_export_filters_with_bound_threshold_and_writes_review_columns(tmp_path)
 	]
 	path = tmp_path / "nested" / "review.csv"
 	assert export_review(client, path, threshold=0.8) == 2
-	sql, params = client.query.call_args.args
+	sql, params = client.query.call_args_list[1].args
 	assert "statut_validation = 'A_REVOIR' OR score_confiance < @threshold" in sql
 	assert params[0].name == "threshold"
 	assert params[0].value == 0.8
@@ -64,7 +64,9 @@ def test_invalid_threshold_fails_without_query(tmp_path, threshold):
 	client = Mock(spec=BigQueryClient)
 	with pytest.raises(ValueError, match="seuil"):
 		export_review(client, tmp_path / "review.csv", threshold=threshold)
-	client.query.assert_not_called()
+	assert all(
+		"ops.pipeline_runs" in call.args[0] for call in client.query.call_args_list
+	)
 
 
 def test_export_rejects_duplicate_ids(tmp_path):
@@ -83,7 +85,9 @@ def test_empty_export_is_importable_without_writes(tmp_path):
 	assert export_review(client, path, threshold=0) == 0
 	client.reset_mock()
 	assert import_review(client, path) == 0
-	client.query.assert_not_called()
+	assert all(
+		"ops.pipeline_runs" in call.args[0] for call in client.query.call_args_list
+	)
 
 
 def test_import_updates_only_decided_rows_with_transaction_and_original_state(tmp_path):
@@ -100,7 +104,7 @@ def test_import_updates_only_decided_rows_with_transaction_and_original_state(tm
 	client.reset_mock()
 	client.query.return_value = []
 	assert import_review(client, path) == 2
-	sql, params = client.query.call_args.args
+	sql, params = client.query.call_args_list[1].args
 	assert "BEGIN TRANSACTION" in sql and "COMMIT TRANSACTION" in sql
 	assert "COUNT(e.extraction_id) != 1" in sql
 	assert "e.valide_par IS NOT DISTINCT FROM r.valide_par_initial" in sql
@@ -137,7 +141,9 @@ def test_import_rejects_incomplete_or_invalid_decisions_before_write(
 	client.reset_mock()
 	with pytest.raises(ValueError, match="Décision ou validateur"):
 		import_review(client, path)
-	client.query.assert_not_called()
+	assert all(
+		"ops.pipeline_runs" in call.args[0] for call in client.query.call_args_list
+	)
 
 
 def test_import_duplicate_and_invalid_header_are_rejected(tmp_path):
@@ -150,7 +156,9 @@ def test_import_duplicate_and_invalid_header_are_rejected(tmp_path):
 	client.reset_mock()
 	with pytest.raises(ValueError, match="dupliqué"):
 		import_review(client, path)
-	client.query.assert_not_called()
+	assert all(
+		"ops.pipeline_runs" in call.args[0] for call in client.query.call_args_list
+	)
 	path.write_text("extraction_id,nouveau_statut\nid-1,VALIDE\n", encoding="utf-8")
 	with pytest.raises(ValueError, match="Colonnes"):
 		import_review(client, path)

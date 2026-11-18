@@ -71,6 +71,7 @@ def test_classify_queries_deduplicates_case_and_accents():
 def test_collect_intent_writes_classified_rows_and_journals_run():
 	bq = Mock(spec=BigQueryClient)
 	bq.query.side_effect = [
+		[],
 		[
 			{"requete": "avocat prud'hommes"},
 			{"requete": "comparatif logiciel rh"},
@@ -100,17 +101,24 @@ def test_collect_intent_writes_classified_rows_and_journals_run():
 	)
 
 	run_sql = bq.query.call_args_list[-1].args[0]
-	assert "ops.pipeline_runs" in run_sql and "collect_intent" in run_sql
+	assert "UPDATE `ops.pipeline_runs`" in run_sql
+	start = bq.query.call_args_list[0]
+	assert "INSERT INTO `ops.pipeline_runs`" in start.args[0]
+	assert {p.name: p.value for p in start.args[1]}["job"] == "collect_intent"
+	assert bq.query.call_count == 3
 	run_params = bq.query.call_args_list[-1].args[1]
-	counts_param = next(p for p in run_params if p.name == "compteurs")
+	counts_param = next(p for p in run_params if p.name == "counts")
 	counts = json.loads(counts_param.value)
 	assert counts["classified"] == 3
 	assert counts["distribution"][INTENT_TRANSACTIONNELLE] == 1
+	assert {p.name: p.value for p in start.args[1]}["run_id"] == stats.run_id
+	assert {p.name: p.value for p in run_params}["run_id"] == stats.run_id
 
 
 def test_collect_intent_dry_run_computes_distribution_without_insert():
 	bq = Mock(spec=BigQueryClient)
 	bq.query.side_effect = [
+		[],
 		[{"requete": "avocat"}, {"requete": "durée du travail"}],
 		[],
 	]
@@ -125,7 +133,7 @@ def test_collect_intent_dry_run_computes_distribution_without_insert():
 
 def test_collect_intent_handles_empty_candidates():
 	bq = Mock(spec=BigQueryClient)
-	bq.query.side_effect = [[], []]
+	bq.query.side_effect = [[], [], []]
 
 	stats = collect_intent(bq)
 
@@ -138,7 +146,32 @@ def test_collect_intent_handles_empty_candidates():
 
 def test_collect_intent_rejects_dry_run_bigquery_client():
 	bq = Mock(spec=BigQueryClient)
-	bq.query.return_value = Mock(spec=QueryJob)
+	bq.query.side_effect = [[], Mock(spec=QueryJob), []]
 
 	with pytest.raises(ValueError, match="dry-run"):
 		collect_intent(bq)
+
+
+def test_failed_write_preserves_counts_and_error():
+	bq = Mock(spec=BigQueryClient)
+	bq.query.side_effect = [[], [{"requete": "avocat"}], []]
+	bq.insert.side_effect = RuntimeError("write failed")
+
+	with pytest.raises(RuntimeError, match="write failed"):
+		collect_intent(bq)
+
+	assert bq.query.call_count == 3
+	params = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
+	assert params["status"] == "FAILED"
+	assert params["error"] == "RuntimeError: write failed"
+	assert json.loads(params["counts"])["classified"] == 1
+
+
+def test_job_and_final_tracking_failures_are_both_preserved():
+	bq = Mock(spec=BigQueryClient)
+	bq.query.side_effect = [[], [{"requete": "avocat"}], RuntimeError("log failed")]
+	bq.insert.side_effect = ValueError("write failed")
+
+	with pytest.raises(ExceptionGroup) as raised:
+		collect_intent(bq)
+	assert [str(e) for e in raised.value.exceptions] == ["write failed", "log failed"]

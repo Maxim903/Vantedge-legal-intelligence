@@ -16,7 +16,7 @@ async function Formulaire({
   return (
     <>
       {erreur === "lien-invalide" && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Ce lien est invalide ou a expiré. Veuillez recommencer.
         </p>
       )}
