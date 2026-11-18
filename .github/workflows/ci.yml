@@ -138,7 +138,7 @@ jobs:
             bq mk --dataset --location="$BQ_LOCATION" "$GCP_PROJECT_ID:marts"
           fi
           bq query --project_id="$GCP_PROJECT_ID" --location="$BQ_LOCATION" --use_legacy_sql=false < apps/web/e2e/fixtures/marts.sql
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - name: Démarrer Supabase et initialiser le plan
