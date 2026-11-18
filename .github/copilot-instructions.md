@@ -26,3 +26,9 @@ Proposition de découpage du dataset marts [À valider] : 12 dimensions, 6 table
 | 20 | pont_notion_situation | Pont | Rattachement notion / situation de vie. |
 | 21 | ref_taxonomie_intention | Référence | Taxonomie et règles de classification des intentions. |
 | 22 | ref_modele_prompt | Référence | Registre des modèles et versions de prompts. |
+
+## Protection de la branche principale
+
+- Ne jamais pousser directement sur `main` ; tout changement doit passer par une branche dédiée et une Pull Request.
+- Ne fusionner une Pull Request qu'après le succès du workflow CI requis.
+- Si les règles de protection GitHub ne sont pas configurées ou ne sont pas disponibles, respecter ces règles manuellement sans les contourner.

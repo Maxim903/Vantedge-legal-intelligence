@@ -1,0 +1,116 @@
+version: 2
+
+sources:
+  - name: raw
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: raw
+    tables:
+      - name: articles
+        description: >
+          Articles juridiques du corpus, avec leur code, livre, titre et
+          chapitre (identifiants LEGISCTA et libellés).
+        config:
+          loaded_at_field: "timestamp(date_chargement)"
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 60, period: day}
+            filter: "date_chargement <= current_date()"
+        columns:
+          - name: article_id
+            data_tests: [not_null]
+      - name: article_versions
+        description: Versions temporelles des articles juridiques.
+        config:
+          loaded_at_field: "timestamp(date_chargement)"
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 60, period: day}
+            filter: "date_chargement <= current_date()"
+        columns:
+          - name: article_version_id
+            data_tests: [not_null, unique]
+          - name: article_id
+            data_tests: [not_null]
+      - name: entites_extraites
+        description: Notions extraites par le LLM et leur validation.
+        config:
+          loaded_at_field: extrait_le
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 60, period: day}
+            filter: "extrait_le <= current_timestamp()"
+        columns:
+          - name: extraction_id
+            data_tests: [not_null, unique]
+          - name: article_version_id
+            data_tests: [not_null]
+      - name: requetes_candidates
+        description: Requêtes web candidates issues des notions.
+      - name: requetes_intentions
+        description: Intention dominante de chaque requête candidate.
+        config:
+          loaded_at_field: "timestamp(date_classification)"
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 60, period: day}
+            filter: "date_classification <= current_date()"
+      - name: dataforseo_volumes
+        description: Volumes Google Ads DataForSEO chargés depuis les archives GCS.
+        config:
+          loaded_at_field: "timestamp(date_archive)"
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 60, period: day}
+            filter: "date_archive <= current_date()"
+        columns:
+          - name: archive_blob
+            data_tests: [not_null]
+          - name: mot_cle
+            data_tests: [not_null]
+      - name: dataforseo_serp
+        description: Résultats SERP DataForSEO chargés depuis les archives GCS.
+        config:
+          loaded_at_field: "timestamp(date_archive)"
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 60, period: day}
+            filter: "date_archive <= current_date()"
+        columns:
+          - name: archive_blob
+            data_tests: [not_null]
+          - name: mot_cle
+            data_tests: [not_null]
+      - name: dataforseo_intent
+        description: Intentions DataForSEO chargées depuis les archives GCS.
+        columns:
+          - name: archive_blob
+            data_tests: [not_null]
+          - name: mot_cle
+            data_tests: [not_null]
+
+  - name: ops
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: ops
+    tables:
+      - name: extraction_results
+        description: Résultats d'extraction, y compris les mises en quarantaine.
+        config:
+          loaded_at_field: extrait_le
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 60, period: day}
+            filter: "extrait_le <= current_timestamp()"
+        columns:
+          - name: extrait_le
+            data_tests: [not_null]
+          - name: statut
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [SUCCESS, QUARANTINE]
+      - name: couts_api
+        description: Coûts réels des appels API par lot.
+        columns:
+          - name: cout_id
+            data_tests: [not_null, unique]

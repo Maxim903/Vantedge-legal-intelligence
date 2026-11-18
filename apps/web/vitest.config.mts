@@ -1,0 +1,29 @@
+import { fileURLToPath } from "node:url";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    fs: {
+      allow: [
+        fileURLToPath(new URL(".", import.meta.url)),
+        fileURLToPath(new URL("../../graph/queries", import.meta.url)),
+      ],
+    },
+  },
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // `server-only` lève une erreur hors du runtime serveur de Next.js.
+      "server-only": fileURLToPath(
+        new URL("./vitest.server-only.ts", import.meta.url),
+      ),
+    },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./vitest.setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+  },
+});

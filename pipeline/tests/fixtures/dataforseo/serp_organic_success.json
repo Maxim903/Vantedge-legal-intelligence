@@ -1,0 +1,71 @@
+{
+  "version": "0.1.20200129",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "12.2397 sec.",
+  "cost": 0.003,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "01301234-1535-0121-0000-9c8e396a59cc",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "12.1329 sec.",
+      "cost": 0.003,
+      "result_count": 1,
+      "path": ["v3", "serp", "google", "organic", "live", "regular"],
+      "data": {
+        "api": "serp",
+        "function": "live",
+        "se": "google",
+        "se_type": "organic",
+        "keyword": "droit du travail",
+        "depth": 10
+      },
+      "result": [
+        {
+          "keyword": "droit du travail",
+          "type": "organic",
+          "se_domain": "google.fr",
+          "location_code": 2250,
+          "language_code": "fr",
+          "spell": null,
+          "item_types": ["featured_snippet", "organic"],
+          "se_results_count": 85600000,
+          "items_count": 3,
+          "items": [
+            {
+              "type": "featured_snippet",
+              "rank_group": 1,
+              "rank_absolute": 1,
+              "domain": "www.service-public.fr",
+              "title": "Droit du travail",
+              "url": "https://www.service-public.fr/particuliers/vosdroits/N19806"
+            },
+            {
+              "type": "organic",
+              "rank_group": 1,
+              "rank_absolute": 2,
+              "page": 1,
+              "domain": "code.travail.gouv.fr",
+              "title": "Code du travail numerique",
+              "url": "https://code.travail.gouv.fr/",
+              "breadcrumb": "https://code.travail.gouv.fr"
+            },
+            {
+              "type": "organic",
+              "rank_group": 2,
+              "rank_absolute": 3,
+              "page": 1,
+              "domain": "www.legifrance.gouv.fr",
+              "title": "Code du travail - Legifrance",
+              "url": "https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006072050/",
+              "breadcrumb": "https://www.legifrance.gouv.fr"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

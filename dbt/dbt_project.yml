@@ -1,0 +1,36 @@
+name: vantedge_legal_intelligence
+version: "0.1.0"
+config-version: 2
+
+profile: vantedge_legal_intelligence
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  seuil_confiance: 0.8
+  statuts_notions_retenus: ["VALIDE", "AUTO"]
+  # Codes de localisation DataForSEO connus et pays correspondant (MVP : France).
+  localisations_pays: {2250: "FR"}
+
+models:
+  vantedge_legal_intelligence:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: ephemeral
+    marts:
+      +materialized: table
+      +schema: marts
+    ops:
+      +materialized: view
+      +schema: ops
+
+seeds:
+  vantedge_legal_intelligence:
+    +schema: staging

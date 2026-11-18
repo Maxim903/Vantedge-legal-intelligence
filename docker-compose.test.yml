@@ -1,0 +1,15 @@
+services:
+  neo4j:
+    image: neo4j:5.26.33-community
+    environment:
+      NEO4J_AUTH: none
+    ports:
+      - "127.0.0.1:17687:7687"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-a", "bolt://localhost:7687", "-u", "", "-p", "", "RETURN 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 30s

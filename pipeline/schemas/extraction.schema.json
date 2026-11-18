@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "NotionExtraite": {
+      "description": "A legal notion extracted from an article version.",
+      "properties": {
+        "libelle": {
+          "minLength": 1,
+          "title": "Libelle",
+          "type": "string"
+        },
+        "definition_courte": {
+          "minLength": 1,
+          "title": "Definition Courte",
+          "type": "string"
+        },
+        "situations_de_vie": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Situations De Vie",
+          "type": "array"
+        },
+        "confiance": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confiance",
+          "type": "number"
+        },
+        "citation_article": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Citation Article",
+          "type": "string"
+        }
+      },
+      "required": [
+        "libelle",
+        "definition_courte",
+        "situations_de_vie",
+        "confiance",
+        "citation_article"
+      ],
+      "title": "NotionExtraite",
+      "type": "object"
+    }
+  },
+  "description": "All extracted notions associated with an article version.",
+  "properties": {
+    "article_version_id": {
+      "pattern": "^LEGIARTI[0-9]{12}$",
+      "title": "Article Version Id",
+      "type": "string"
+    },
+    "notions": {
+      "items": {
+        "$ref": "#/$defs/NotionExtraite"
+      },
+      "title": "Notions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "article_version_id",
+    "notions"
+  ],
+  "title": "ResultatExtraction",
+  "type": "object"
+}

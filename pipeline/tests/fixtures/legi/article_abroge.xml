@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ARTICLE>
+<META>
+<META_COMMUN>
+<ID>LEGIARTI000006583330</ID>
+<ANCIEN_ID>RAAXXXXXXXX1X313L002XXAA</ANCIEN_ID>
+<ORIGINE>LEGI</ORIGINE>
+<URL>article/LEGI/ARTI/00/00/06/58/33/LEGIARTI000006583330.xml</URL>
+<NATURE>Article</NATURE>
+</META_COMMUN>
+<META_SPEC>
+<META_ARTICLE>
+
+<NUM>L313-2</NUM>
+
+<ETAT>ABROGE</ETAT>
+
+<DATE_DEBUT>1993-07-23</DATE_DEBUT>
+<DATE_FIN>1995-02-02</DATE_FIN>
+
+
+
+<TYPE>AUTONOME</TYPE>
+</META_ARTICLE>
+</META_SPEC>
+</META>
+<CONTEXTE>
+<TEXTE autorite="" cid="LEGITEXT000006071367" date_publi="2999-01-01" date_signature="2999-01-01" ministere="" nature="CODE" nor="" num="" num_parution_jo="">
+<TITRE_TXT c_titre_court="Code rural et de la pêche maritime" debut="2010-05-08" fin="2999-01-01" id_txt="LEGITEXT000022197698">Code rural et de la pêche maritime</TITRE_TXT>
+<TITRE_TXT c_titre_court="Code rural" debut="1979-12-01" fin="2010-05-08" id_txt="LEGITEXT000006071367">Code rural (nouveau)</TITRE_TXT>
+<TM>
+<TITRE_TM debut="1982-12-01" fin="2999-01-01" id="LEGISCTA000006098262">Partie législative</TITRE_TM>
+<TM>
+<TITRE_TM debut="1993-07-23" fin="2999-01-01" id="LEGISCTA000006121420">Livre III : Exploitation agricole</TITRE_TM>
+<TM>
+<TITRE_TM debut="1993-07-23" fin="2999-01-01" id="LEGISCTA000006138327">Titre Ier : Dispositions générales</TITRE_TM>
+<TM>
+<TITRE_TM debut="1993-07-23" fin="2009-03-28" id="LEGISCTA000006152227">Chapitre III : Les instruments</TITRE_TM>
+<TITRE_TM debut="2009-03-28" fin="2999-01-01" id="LEGISCTA000020445186">Chapitre III : L'Agence de services et de paiement</TITRE_TM>
+<TM>
+<TITRE_TM debut="1993-07-23" fin="1995-02-02" id="LEGISCTA000006167741">Section 2 : La Commission nationale des structures agricoles.</TITRE_TM>
+</TM>
+</TM>
+</TM>
+</TM>
+</TM>
+</TEXTE>
+</CONTEXTE>
+
+<VERSIONS>
+<VERSION etat="ABROGE">
+<LIEN_ART debut="1993-07-23" etat="ABROGE" fin="1995-02-02" id="LEGIARTI000006583330" num="L313-2" origine="LEGI"/>
+</VERSION>
+<VERSION etat="MODIFIE">
+<LIEN_ART debut="2009-03-28" etat="MODIFIE" fin="2010-05-08" id="LEGIARTI000020445182" num="L313-2" origine="LEGI"/>
+</VERSION>
+<VERSION etat="VIGUEUR">
+<LIEN_ART debut="2010-05-08" etat="VIGUEUR" fin="2999-01-01" id="LEGIARTI000022202591" num="L313-2" origine="LEGI"/>
+</VERSION>
+</VERSIONS>
+<NOTA>
+<CONTENU/>
+</NOTA>
+<BLOC_TEXTUEL>
+<CONTENU>
+<br/>   Une Commission nationale des structures agricoles, dont la composition est fixée par décret, peut être saisie par le ministre de l'agriculture de toute question relative aux structures agricoles. Elle peut formuler directement des propositions.<br/>
+<br/>
+</CONTENU>
+</BLOC_TEXTUEL>
+<LIENS>
+<LIEN cidtexte="JORFTEXT000000545718" datesignatexte="1993-07-22" id="JORFTEXT000000545718" naturetexte="LOI" nortexte="AGRX9300027L" num="" numtexte="93-934" sens="source" typelien="CODIFICATION">Loi 93-934 1993-07-22</LIEN>
+<LIEN cidtexte="JORFTEXT000000545718" datesignatexte="1993-07-22" id="JORFTEXT000000545718" naturetexte="LOI" nortexte="AGRX9300027L" num="" numtexte="93-934" sens="source" typelien="CREATION">Loi 93-934 1993-07-22 annexe JORF 23 juillet 1993</LIEN>
+<LIEN cidtexte="JORFTEXT000000734238" datesignatexte="1995-02-01" id="JORFTEXT000000734238" naturetexte="LOI" nortexte="AGRX9400137L" num="" numtexte="95-95" sens="source" typelien="ABROGATION">Loi 95-95 1995-02-01 art. 3 I JORF 2 février 1995</LIEN>
+<LIEN cidtexte="JORFTEXT000032000333" datesignatexte="2016-02-08" id="LEGIARTI000039397685" naturetexte="DECRET" nortexte="ETLR1508421D" num="3" numtexte="2016-126" sens="cible" typelien="CITATION">Décret n°2016-126 du 8 février 2016 - art. 3 (VD)</LIEN>
+<LIEN cidtexte="JORFTEXT000043931353" datesignatexte="2021-07-16" id="LEGIARTI000043933212" naturetexte="ARRETE" nortexte="CCPE2120971A" num="1" numtexte="" sens="cible" typelien="CITATION">Arrêté du 16 juillet 2021 - art. 1 (V)</LIEN>
+<LIEN cidtexte="JORFTEXT000045792559" datesignatexte="2022-05-11" id="LEGITEXT000045793424" naturetexte="DECRET" nortexte="TRAT2212849D" num="" numtexte="2022-804" sens="cible" typelien="CITATION">Décret n°2022-804 du 11 mai 2022 (V)</LIEN>
+<LIEN cidtexte="JORFTEXT000052391036" datesignatexte="2025-10-14" id="LEGITEXT000052393374" naturetexte="ARRETE" nortexte="AGRT2521692A" num="" numtexte="" sens="cible" typelien="CITATION">Arrêté du 14 octobre 2025 (V)</LIEN>
+
+<LIEN cidtexte="LEGITEXT000006071367" datesignatexte="2999-01-01" id="LEGIARTI000033669129" naturetexte="CODE" nortexte="" num="D313-15" numtexte="" sens="cible" typelien="CITATION">Code rural - art. D313-15 (V)</LIEN>
+<LIEN cidtexte="LEGITEXT000006071367" datesignatexte="2999-01-01" id="LEGIARTI000020445173" naturetexte="CODE" nortexte="" num="L313-4" numtexte="" sens="cible" typelien="CITATION">Code rural - art. L313-4 (V)</LIEN>
+<LIEN cidtexte="" datesignatexte="" id="" naturetexte="" nortexte="" num="" numtexte="" sens="source" typelien="CONCORDANCE">Code rural 188-3-1</LIEN>
+<LIEN cidtexte="LEGITEXT000006071367" datesignatexte="2999-01-01" id="LEGIARTI000020466592" naturetexte="CODE" nortexte="" num="R313-15" numtexte="" sens="cible" typelien="CITATION">Code rural et de la pêche maritime - art. R313-15 (T)</LIEN>
+<LIEN cidtexte="LEGITEXT000006071367" datesignatexte="2999-01-01" id="LEGIARTI000026736458" naturetexte="CODE" nortexte="" num="R313-22" numtexte="" sens="cible" typelien="CITATION">Code rural et de la pêche maritime - art. R313-22 (T)</LIEN>
+</LIENS>
+</ARTICLE>

@@ -1,0 +1,5 @@
+CREATE CONSTRAINT article_id IF NOT EXISTS FOR (a:Article) REQUIRE a.article_id IS UNIQUE;
+CREATE CONSTRAINT notion_id IF NOT EXISTS FOR (n:Notion) REQUIRE n.notion_id IS UNIQUE;
+CREATE CONSTRAINT situation_id IF NOT EXISTS FOR (s:SituationDeVie) REQUIRE s.situation_id IS UNIQUE;
+CREATE CONSTRAINT requete_id IF NOT EXISTS FOR (r:Requete) REQUIRE r.requete_id IS UNIQUE;
+CREATE CONSTRAINT intention_type IF NOT EXISTS FOR (i:Intention) REQUIRE i.type IS UNIQUE;
