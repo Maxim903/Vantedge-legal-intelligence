@@ -1,7 +1,7 @@
 # 📊 Statut de Déploiement - Vantedge Legal Intelligence
 
-**Dernière mise à jour**: 2026-11-18 21:07 UTC  
-**Status Global**: 🟢 **OPÉRATIONNEL** - Toutes les phases complétées!
+**Dernière mise à jour**: 2026-11-18 21:34 UTC  
+**Status Global**: 🟢 **OPÉRATIONNEL** - Repo rendu public, déploiement frontend activé!
 
 ---
 
@@ -119,11 +119,13 @@ echo -n "votre-valeur-ici" | gcloud secrets versions add nom-secret --data-file=
 
 ---
 
-### PHASE 7️⃣: Frontend Deployment - ✅ Complétée
+### PHASE 7️⃣: Frontend Deployment - 🟡 EN COURS
 - ✅ Dockerfile créé pour le frontend Next.js
 - ✅ GitHub Actions Workflow configuré (`deploy-frontend.yml`)
 - ✅ Script de déploiement manuel créé
 - ✅ Documentation complète rédigée
+- ✅ Repo rendu **PUBLIC**
+- 🔄 Workflow déclenché (en attente de build)
 
 **Composants déployés**:
 - ✅ Dockerfile (apps/web/Dockerfile)
@@ -131,12 +133,10 @@ echo -n "votre-valeur-ici" | gcloud secrets versions add nom-secret --data-file=
 - ✅ Script deploy (scripts/deploy-frontend.sh)
 - ✅ Documentation (FRONTEND_DEPLOYMENT.md)
 
-**Prochaines étapes pour Cloud Run**:
-1. Pousser les fichiers sur main
-2. GitHub Actions build et deploy automatiquement
-3. Service sera accessible via l'URL de Cloud Run
-
-**Statut**: Prêt pour déploiement - Faites un commit et push pour déclencher
+**Status**:
+- 🟢 Repo PUBLIC - Workflow peut s'exécuter automatiquement
+- ⏳ Build en cours sur GitHub Actions
+- Vérifiez: https://github.com/Maxim903/Vantedge-legal-intelligence/actions
 
 ---
 
@@ -144,11 +144,11 @@ echo -n "votre-valeur-ici" | gcloud secrets versions add nom-secret --data-file=
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  GitHub Repository                         │
+│                  GitHub Repository (PUBLIC)                │
 │                                                             │
 │  ├─ Main Branch (Protected)                               │
 │  ├─ GitHub Actions Workflows                              │
-│  │  ├─ deploy-frontend.yml ✅ Créé                        │
+│  │  ├─ deploy-frontend.yml ✅ AUTO-TRIGGERED             │
 │  │  └─ deploy-pipeline.yml  (À créer)                     │
 │  └─ Secrets (3 configurés) ✅                             │
 └─────────────────────────────────────────────────────────────┘
@@ -157,8 +157,8 @@ echo -n "votre-valeur-ici" | gcloud secrets versions add nom-secret --data-file=
 │          Google Cloud Platform (test-barometre-juridique)   │
 │                                                             │
 │  Frontend (Cloud Run):                                     │
-│  ├─ Service: vil-web                     [À déployer]     │
-│  ├─ Image: vil-frontend/vil-web          [Prête]          │
+│  ├─ Service: vil-web                     [EN DÉPLOIEMENT] │
+│  ├─ Image: vil-frontend/vil-web          [Build en cours] │
 │  └─ URL: https://vil-web-xxx.region-run.app              │
 │                                                             │
 │  Backend (Cloud Run Jobs):                                │
@@ -209,7 +209,8 @@ echo -n "votre-valeur-ici" | gcloud secrets versions add nom-secret --data-file=
 - [x] GitHub Actions Workflow créé
 - [x] Script deploy manuel créé
 - [x] Documentation écrite
-- [ ] Déploiement effectué (en attente d'un commit)
+- [x] Repo rendu PUBLIC
+- [ ] Déploiement effectué (en attente)
 - [ ] Service URL testée
 - [ ] Variables d'environnement configurées
 
@@ -229,43 +230,24 @@ echo -n "votre-valeur-ici" | gcloud secrets versions add nom-secret --data-file=
 
 ## 📈 Prochaines Étapes Recommandées
 
-### 1️⃣ Immédiat (Aujourd'hui)
-```bash
-# Commitez les fichiers créés
-git add apps/web/Dockerfile \
-        apps/web/.dockerignore \
-        apps/web/.env.cloud.example \
-        .github/workflows/deploy-frontend.yml \
-        scripts/deploy-frontend.sh \
-        FRONTEND_DEPLOYMENT.md \
-        DEPLOYMENT.md
-
-git commit -m "feat: Add frontend deployment to Cloud Run
-
-- Create Dockerfile for Next.js app
-- Add GitHub Actions workflow for auto-deployment
-- Configure Cloud Run service (vil-web)
-- Add deployment documentation
-- Setup Docker auth and artifact registry
-
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
-
-git push origin main
-```
+### 1️⃣ Immédiat (Maintenant)
+✅ Repo rendu PUBLIC
+⏳ Workflow GitHub Actions se déclenche automatiquement
+📍 Vérifiez la progression: https://github.com/Maxim903/Vantedge-legal-intelligence/actions
 
 ### 2️⃣ Court terme (Cette semaine)
-1. Mettre à jour les secrets avec vraies valeurs
-2. Tester le déploiement du pipeline (image Docker)
-3. Mettre à jour les variables d'environnement frontend
-4. Tester les jobs Cloud Run manuellement
-5. Vérifier les logs et les alertes
+1. Attendre la fin du build GitHub Actions (~5-10 minutes)
+2. Vérifier que le service Cloud Run est déployé
+3. Tester l'accès à l'URL du frontend
+4. Mettre à jour les secrets avec vraies valeurs
+5. Configurer les variables d'environnement frontend
 
 ### 3️⃣ Moyen terme (Prochaines semaines)
 1. Configurer Supabase (auth, realtime)
 2. Connecter Neo4j Aura
-3. Mettre à place des tests de charge
+3. Mettre en place des tests de charge
 4. Configurer domaine personnalisé
-5. Mettre à place des sauvegardes automatiques
+5. Mettre en place des sauvegardes automatiques
 
 ---
 
@@ -292,32 +274,22 @@ git push origin main
 
 ---
 
-## 📞 Support
+## 🚀 Statut du Déploiement Frontend
 
-En cas de problème:
+**Repo Public**: ✅ Activé  
+**Workflow Auto-Trigger**: ✅ Actif  
+**Build Status**: ⏳ En attente
 
-1. **Logs Cloud Run**: 
-   ```bash
-   gcloud run logs read vil-web --limit=50
-   ```
+Suivre l'exécution:
+```bash
+# En local
+gh run list --repo Maxim903/Vantedge-legal-intelligence --limit=5
 
-2. **Logs Cloud Scheduler**:
-   ```bash
-   gcloud scheduler jobs describe vil-load-corpus --location=europe-west9
-   ```
-
-3. **Vérifier Secret Manager**:
-   ```bash
-   gcloud secrets versions list nom-secret
-   ```
-
-4. **Lister les images Docker**:
-   ```bash
-   gcloud artifacts docker images list europe-west9-docker.pkg.dev/test-barometre-juridique/vil-frontend
-   ```
+# Ou visiter
+https://github.com/Maxim903/Vantedge-legal-intelligence/actions
+```
 
 ---
 
-**Status**: 🟢 Prêt pour production  
-**Prochaine étape**: Faire un commit et pousser sur main pour déclencher le déploiement automatique du frontend
-
+**Status**: 🟡 En transition vers la production  
+**Prochaine étape**: Attendre le succès du workflow GitHub Actions
