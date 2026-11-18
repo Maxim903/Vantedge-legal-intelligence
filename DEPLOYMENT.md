@@ -103,110 +103,92 @@ jobs:
 
 ### PHASE 1️⃣: Setup Infra Google Cloud (5-10 min)
 
-```bash
-# 1. Activer les APIs
-gcloud services enable \
-  run.googleapis.com \
-  scheduler.googleapis.com \
-  secretmanager.googleapis.com \
-  bigquery.googleapis.com \
-  storage.googleapis.com \
-  artifactregistry.googleapis.com \
-  compute.googleapis.com
+✅ **Déjà complétée!**
 
-# 2. Créer le repository Docker Artifact Registry
-gcloud artifacts repositories create vil-pipeline \
-  --repository-format=docker \
-  --location=europe-west9
-
-# 3. Configurer l'authentification Docker
-gcloud auth configure-docker europe-west9-docker.pkg.dev
-```
+Ressources créées :
+- ✅ Artifact Registry : `vil-pipeline` (europe-west9)
+- ✅ APIs activées : Cloud Run, Scheduler, Secret Manager, BigQuery, etc.
 
 ### PHASE 2️⃣: Créer les Comptes de Service (5 min)
 
-```bash
-PROJECT_ID="votre-projet-gcp"
+✅ **Déjà complétée!**
 
-# Compte de service pour les Jobs
-gcloud iam service-accounts create vil-jobs-runner \
-  --display-name="Vantedge Legal Intelligence - Jobs Runner"
-
-# Compte de service pour Scheduler
-gcloud iam service-accounts create vil-scheduler \
-  --display-name="Vantedge Legal Intelligence - Scheduler"
-
-# Accorder les permissions nécessaires
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:vil-jobs-runner@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --role="roles/bigquery.dataEditor"
-
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:vil-jobs-runner@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --role="roles/storage.objectUser"
-```
+Comptes de service créés :
+- ✅ `vil-jobs-runner@test-barometre-juridique.iam.gserviceaccount.com`
+  - Rôles : BigQuery Data Editor, Storage Object User, Secret Manager Secret Accessor
+- ✅ `vil-scheduler@test-barometre-juridique.iam.gserviceaccount.com`
+  - Rôles : Cloud Run Admin, Service Account User
 
 ### PHASE 3️⃣: Créer les Secrets (5 min)
 
-```bash
-# Créer les secrets dans Secret Manager
-echo -n "$LLM_API_KEY" | gcloud secrets create llm-api-key --data-file=-
-echo -n "$DATAFORSEO_LOGIN" | gcloud secrets create dataforseo-login --data-file=-
-echo -n "$DATAFORSEO_PASSWORD" | gcloud secrets create dataforseo-password --data-file=-
-echo -n "$NEO4J_URI" | gcloud secrets create neo4j-uri --data-file=-
-echo -n "$NEO4J_USER" | gcloud secrets create neo4j-user --data-file=-
-echo -n "$NEO4J_PASSWORD" | gcloud secrets create neo4j-password --data-file=-
+✅ **Déjà complétée!**
 
-# Accorder l'accès au compte de service
-for secret in llm-api-key dataforseo-login dataforseo-password neo4j-uri neo4j-user neo4j-password; do
-  gcloud secrets add-iam-policy-binding "$secret" \
-    --member="serviceAccount:vil-jobs-runner@${PROJECT_ID}.iam.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
-done
-```
+Secrets créés dans Google Cloud Secret Manager :
+- ✅ `llm-api-key`
+- ✅ `dataforseo-login`
+- ✅ `dataforseo-password`
+- ✅ `neo4j-uri`
+- ✅ `neo4j-user`
+- ✅ `neo4j-password`
+- ✅ `supabase-url`
+- ✅ `supabase-key`
 
-### PHASE 4️⃣: Build et Push l'Image Docker (10-15 min)
+**À faire** : Mettez à jour les valeurs des secrets avec vos vraies données :
 
 ```bash
-# Build depuis la racine
-docker build -f pipeline/Dockerfile -t vil-pipeline:latest .
+# Exemple pour mettre à jour un secret
+echo -n "votre-valeur" | gcloud secrets versions add llm-api-key --data-file=-
 
-# Tag pour Artifact Registry
-docker tag vil-pipeline:latest \
-  europe-west9-docker.pkg.dev/PROJECT_ID/vil-pipeline/vil-pipeline:latest
-
-# Push
-docker push europe-west9-docker.pkg.dev/PROJECT_ID/vil-pipeline/vil-pipeline:latest
-
-# Vérifier
-docker run --rm europe-west9-docker.pkg.dev/PROJECT_ID/vil-pipeline/vil-pipeline:latest --help
+# Ou utiliser un fichier
+gcloud secrets versions add neo4j-uri --data-file=/path/to/file
 ```
 
-### PHASE 5️⃣: Déployer les Jobs Cloud Run (5-10 min)
+---
+
+### PHASE 4️⃣: Déployer les Cloud Run Jobs (5-10 min)
+
+✅ **Infrastructure prête, en attente de l'image Docker**
+
+Les Cloud Run Jobs seront créés automatiquement lors de votre premier push sur `main` via GitHub Actions.
+
+**Ou manuellement** (une fois l'image disponible) :
 
 ```bash
 # Exporter les variables
-export PROJECT_ID="votre-projet"
-export IMAGE="europe-west9-docker.pkg.dev/${PROJECT_ID}/vil-pipeline/vil-pipeline:latest"
-export JOB_SERVICE_ACCOUNT="vil-jobs-runner@${PROJECT_ID}.iam.gserviceaccount.com"
-export SCHEDULER_SERVICE_ACCOUNT="vil-scheduler@${PROJECT_ID}.iam.gserviceaccount.com"
-export GCS_BUCKET_RAW="votre-bucket-raw"
-export CORPUS_BUCKET="votre-corpus-bucket"
-export CORPUS_OBJECT="legi-archive.zip"
-export EXTRACTION_MAX_COST="100.00"
-export EXTRACTION_COST_PER_CALL="0.01"
-export VOLUMES_MAX_COST="50.00"
-export VOLUMES_COST_PER_CALL="0.001"
-export LLM_SECRET="llm-api-key"
-export DATAFORSEO_LOGIN_SECRET="dataforseo-login"
-export DATAFORSEO_PASSWORD_SECRET="dataforseo-password"
-export NEO4J_URI_SECRET="neo4j-uri"
-export NEO4J_USER_SECRET="neo4j-user"
-export NEO4J_PASSWORD_SECRET="neo4j-password"
+export PROJECT_ID="test-barometre-juridique"
+export GCP_REGION="europe-west9"
+export IMAGE_TAG="latest"  # ou utiliser le SHA du commit: ${{ github.sha }}
 
 # Exécuter le script de déploiement
-bash scripts/deploy_jobs.sh
+bash scripts/deploy-jobs.sh
 ```
+
+Les 3 jobs créés :
+- `vil-load-corpus` - Charge le corpus juridique
+- `vil-extract-notions` - Extrait les notions juridiques
+- `vil-gap-analysis` - Analyse l'écart de couverture
+
+---
+
+### PHASE 5️⃣: Configurer Cloud Scheduler (5-10 min)
+
+✅ **Scripts prêts**
+
+Configurez l'orchestration automatique des jobs :
+
+```bash
+# Exécuter le script de setup
+bash scripts/setup-scheduler.sh
+```
+
+Horaires d'exécution configurés :
+- `vil-load-corpus` : 02:00 UTC (tous les jours)
+- `vil-extract-notions` : 04:00 UTC (tous les jours)
+- `vil-gap-analysis` : 06:00 UTC (tous les jours)
+
+**Modifier les horaires** : Éditez le fichier `scripts/setup-scheduler.sh` et modifiez les valeurs `JOB_SCHEDULES`.
+
+---
 
 ### PHASE 6️⃣: Déployer le Frontend (5-10 min)
 

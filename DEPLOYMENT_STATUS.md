@@ -1,291 +1,189 @@
-# 🚀 Statut de Déploiement - Vantedge Legal Intelligence
+# 📊 Statut du Déploiement - Vantedge Legal Intelligence
 
-**Date**: 2026-11-18  
-**Projet GCP**: `test-barometre-juridique`  
-**Région**: `europe-west9`  
-**Status**: ✅ **5/6 Phases Complétées**
-
----
-
-## 📊 Récapitulatif
-
-| Phase | Composant | Status | Actions |
-|-------|-----------|--------|---------|
-| 1 | GCP Infrastructure | ✅ Complétée | APIs activées, Artifact Registry créé |
-| 2 | Service Accounts | ✅ Complétée | 2 comptes créés avec rôles IAM |
-| 3 | Secrets Manager | ✅ Complétée | 9 secrets sécurisés et configurés |
-| 4 | Build Docker | ⚠️ **Manuel** | Workflow créé, prêt pour exécution locale |
-| 5 | Cloud Run Jobs | ✅ Complétée | 6 jobs créés et configurés |
-| 6 | Frontend | ⏭️ **À faire** | Prêt pour Vercel ou Cloud Run |
+**Date** : 2026-11-18  
+**Projet GCP** : `test-barometre-juridique`  
+**Région** : `europe-west9`
 
 ---
 
-## ✅ Completed: Phase 1-3, 5
+## ✅ Phases Complétées
 
-### Phase 1: Setup GCP Infrastructure
-- ✅ 7 APIs Google Cloud activées
-  - Cloud Run
-  - Cloud Scheduler
-  - Secret Manager
-  - BigQuery
-  - Cloud Storage
-  - Artifact Registry
-  - Cloud Build
-  - Compute Engine
-- ✅ Repository Artifact Registry créé: `vil-pipeline`
-- ✅ Authentification Docker configurée
-
-### Phase 2: Service Accounts
-- ✅ `vil-jobs-runner@test-barometre-juridique.iam.gserviceaccount.com`
-  - Rôles: `roles/bigquery.dataEditor`, `roles/storage.objectUser`, `roles/secretmanager.secretAccessor`, `roles/run.admin`
-- ✅ `vil-scheduler@test-barometre-juridique.iam.gserviceaccount.com`
-  - Rôle: `roles/run.invoker`
-
-### Phase 3: Secrets Manager
-- ✅ 9 secrets créés et sécurisés:
-  - `llm-api-key`
-  - `dataforseo-login`
-  - `dataforseo-password`
-  - `neo4j-uri`
-  - `neo4j-user`
-  - `neo4j-password`
-  - `stripe-secret-key`
-  - `supabase-url`
-  - `supabase-key`
-
-### Phase 5: Cloud Run Jobs
-- ✅ 6 jobs déployés:
-  1. `vil-load-corpus` - Charger le corpus juridique
-  2. `vil-extract-entities` - Extraire les notions via LLM
-  3. `vil-collect-volumes` - Collecte des volumes de recherche
-  4. `vil-load-raw-market` - Charger les données brutes
-  5. `vil-dbt-models` - Modèles DBT et transformation
-  6. `vil-sync-graph` - Synchroniser avec Neo4j
-
----
-
-## ⚠️ En Attente: Phase 4
-
-### Phase 4: Build Docker Image
-
-**Statut**: Workflow créé ✓ | Build planifié ⏳
-
-**Fichier**: `.github/workflows/deploy-pipeline.yml`
-
-**Options pour construire l'image**:
-
-#### Option A: Exécution locale (Recommandé pour test)
-```bash
-# Sur votre machine avec Docker
-gcloud auth login
-gcloud config set project test-barometre-juridique
-gcloud auth configure-docker europe-west9-docker.pkg.dev
-
-cd /path/to/Vantedge-legal-intelligence
-docker build -f pipeline/Dockerfile \
-  -t europe-west9-docker.pkg.dev/test-barometre-juridique/vil-pipeline/vil-pipeline:latest .
-
-docker push europe-west9-docker.pkg.dev/test-barometre-juridique/vil-pipeline/vil-pipeline:latest
-```
-
-#### Option B: GitHub Actions (Automatique)
-- Le workflow se déclenche automatiquement au prochain **push sur main** dans le dossier `pipeline/`
-- Prérequis: Configurer les secrets GitHub
+### PHASE 0️⃣ : GitHub OIDC - ✅ Complétée
+- [x] Workload Identity Pool créé : `github-action`
+- [x] OIDC Provider créé : `github-provider`
+- [x] Service Account créé : `github-actions@test-barometre-juridique.iam.gserviceaccount.com`
+- [x] IAM Roles configurés (artifactregistry.writer, run.developer, secretmanager.secretAccessor)
+- [x] Workflow GitHub Actions prêt : `.github/workflows/deploy-pipeline.yml`
+- [ ] ⏳ **ACTION** : Ajouter 3 secrets dans GitHub Settings > Secrets and variables > Actions
+  - `GCP_PROJECT_ID`
   - `GCP_WORKLOAD_IDENTITY_PROVIDER`
-  - `GCP_SERVICE_ACCOUNT_EMAIL`
+  - `GCP_SERVICE_ACCOUNT`
 
-#### Option C: Cloud Build (via gcloud)
-```bash
-gcloud auth login
-gcloud config set project test-barometre-juridique
-gcloud builds submit . \
-  --config=cloudbuild.yaml \
-  --project=test-barometre-juridique
-```
+### PHASE 1️⃣ : Setup Infra Google Cloud - ✅ Complétée
+- [x] APIs activées (Cloud Run, Scheduler, Secret Manager, BigQuery, etc.)
+- [x] Artifact Registry créé : `vil-pipeline` (docker, europe-west9)
+- [x] Docker authentification configurée
+- [x] Repo URL : `europe-west9-docker.pkg.dev/test-barometre-juridique/vil-pipeline`
+
+### PHASE 2️⃣ : Comptes de Service - ✅ Complétée
+- [x] Service Account créé : `vil-jobs-runner@test-barometre-juridique.iam.gserviceaccount.com`
+  - Rôles : BigQuery Data Editor, Storage Object User, Secret Manager Secret Accessor
+- [x] Service Account créé : `vil-scheduler@test-barometre-juridique.iam.gserviceaccount.com`
+  - Rôles : Cloud Run Admin, Service Account User (sur vil-jobs-runner)
+- [x] IAM Bindings configurés
+
+### PHASE 3️⃣ : Secrets - ✅ Complétée
+- [x] Secret Manager API activée
+- [x] 8 secrets créés (avec placeholder "PLACEHOLDER")
+  - [x] llm-api-key
+  - [x] dataforseo-login
+  - [x] dataforseo-password
+  - [x] neo4j-uri
+  - [x] neo4j-user
+  - [x] neo4j-password
+  - [x] supabase-url
+  - [x] supabase-key
+- [x] Accès IAM configuré pour vil-jobs-runner
+- [ ] ⏳ **ACTION** : Mettre à jour les secrets avec les vraies valeurs
+
+### PHASE 4️⃣ : Cloud Run Jobs - ⏳ En attente d'image Docker
+- [ ] Image Docker disponible dans Artifact Registry
+- [ ] Cloud Run Jobs créés (vil-load-corpus, vil-extract-notions, vil-gap-analysis)
+- [ ] Service Account configuré pour les jobs
+- **Prochaines étapes** :
+  1. Ajouter les 3 secrets GitHub (PHASE 0)
+  2. Faire un push sur `main` → GitHub Actions build et push l'image
+  3. Exécuter `bash scripts/deploy-jobs.sh`
+
+### PHASE 5️⃣ : Cloud Scheduler - ⏳ En attente des Cloud Run Jobs
+- [ ] Cloud Scheduler API activée
+- [ ] Jobs Schedulers créés avec horaires cron
+  - 02:00 UTC : vil-load-corpus
+  - 04:00 UTC : vil-extract-notions
+  - 06:00 UTC : vil-gap-analysis
+- **Action** : Exécuter `bash scripts/setup-scheduler.sh`
+
+### PHASE 6️⃣ : Frontend - ⏳ Pas encore démarrée
+- [ ] Frontend (Next.js) déployé sur Vercel ou Cloud Run
+- [ ] Variables d'environnement configurées
 
 ---
 
-## ⏭️ À Faire: Phase 6
+## 📋 Ressources Créées
 
-### Phase 6: Frontend Deployment
+| Ressource | Nom | Type | Status |
+|-----------|-----|------|--------|
+| Artifact Registry | `vil-pipeline` | Docker | ✅ Créé |
+| Service Account | `vil-jobs-runner` | IAM | ✅ Créé |
+| Service Account | `vil-scheduler` | IAM | ✅ Créé |
+| Workload Identity Pool | `github-action` | OAuth | ✅ Créé |
+| OIDC Provider | `github-provider` | OAuth | ✅ Créé |
+| Secrets (8) | llm-api-key, etc. | Secret Manager | ✅ Créés |
+| Cloud Run Jobs (3) | vil-load-corpus, etc. | Compute | ⏳ Attente d'image |
+| Cloud Scheduler (3) | Scheduler jobs | Scheduler | ⏳ À créer |
 
-**Options**:
+---
 
-#### Option A: Vercel (⭐ Recommandé)
+## 📝 Prochaines Étapes - Priorité
+
+### 1️⃣ URGENT - Secrets GitHub (5 min)
 ```
-1. Accédez à https://vercel.com/import/git
-2. Sélectionnez le repository GitHub
-3. Configurez les variables d'environnement
-4. Cliquez sur "Deploy"
+URL: https://github.com/Maxim903/Vantedge-legal-intelligence/settings/secrets/actions
+
+Ajouter 3 secrets:
+- GCP_PROJECT_ID: test-barometre-juridique
+- GCP_WORKLOAD_IDENTITY_PROVIDER: projects/31886648583/locations/global/workloadIdentityPools/github-action/providers/github-provider
+- GCP_SERVICE_ACCOUNT: github-actions@test-barometre-juridique.iam.gserviceaccount.com
 ```
 
-**Avantages**:
-- Deploy automatique à chaque push sur main
-- Preview URLs pour chaque PR
-- Scaling automatique
-- CDN global
-- Gratuit pour débuter
-
-#### Option B: Cloud Run (Intégration GCP totale)
+### 2️⃣ IMPORTANT - Mettre à jour les secrets GCP (10 min)
 ```bash
+# Pour chaque secret, remplacer PLACEHOLDER par votre valeur réelle
+echo -n "VOTRE_CLÉ_LLM" | gcloud secrets versions add llm-api-key --data-file=-
+echo -n "VOTRE_LOGIN_DATAFORSEO" | gcloud secrets versions add dataforseo-login --data-file=-
+# ... etc
+```
+
+### 3️⃣ Faire un push sur main (automatique)
+```bash
+git push origin main
+# GitHub Actions va:
+# - Builder l'image Docker
+# - Pousser vers Artifact Registry
+# - Mettre à jour les Cloud Run Jobs (s'ils existent)
+```
+
+### 4️⃣ Déployer les Cloud Run Jobs (5 min)
+```bash
+bash scripts/deploy-jobs.sh
+```
+
+### 5️⃣ Configurer Cloud Scheduler (5 min)
+```bash
+bash scripts/setup-scheduler.sh
+```
+
+### 6️⃣ Déployer le Frontend (10-15 min)
+```bash
+# Option A: Vercel
+npm install -g vercel
 cd apps/web
-docker build -t europe-west9-docker.pkg.dev/test-barometre-juridique/frontend/nextjs-app:latest .
-docker push europe-west9-docker.pkg.dev/test-barometre-juridique/frontend/nextjs-app:latest
+vercel deploy --prod
 
-gcloud run deploy nextjs-app \
-  --image=europe-west9-docker.pkg.dev/test-barometre-juridique/frontend/nextjs-app:latest \
-  --region=europe-west9 \
-  --allow-unauthenticated \
-  --memory=1Gi \
-  --cpu=1
+# Option B: Cloud Run
+bash scripts/deploy-frontend.sh
 ```
 
 ---
 
-## 🔧 Configuration Requise Pour Continuer
+## 🔧 Scripts Disponibles
 
-### Pour Phase 4 (Build Docker)
+| Script | Description | Status |
+|--------|-------------|--------|
+| `.github/workflows/deploy-pipeline.yml` | Workflow GitHub Actions | ✅ Prêt |
+| `scripts/test-github-oidc.sh` | Test configuration OIDC | ✅ Exécutable |
+| `scripts/deploy-jobs.sh` | Déployer Cloud Run Jobs | ✅ Prêt |
+| `scripts/setup-scheduler.sh` | Configurer Cloud Scheduler | ✅ Prêt |
+| `GITHUB_OIDC_SETUP.md` | Guide détaillé OIDC | ✅ Documentation |
+| `DEPLOYMENT.md` | Guide complet de déploiement | ✅ Mis à jour |
 
-#### Option A (Local):
-- ✅ Docker installé
-- ✅ gcloud CLI installé
-- ⚠️ **À faire**: `gcloud auth login`
-- ⚠️ **À faire**: Exécuter les commandes docker build/push
+---
 
-#### Option B (GitHub Actions):
-- ⚠️ **À faire**: Configurer les secrets GitHub:
-  ```
-  GCP_WORKLOAD_IDENTITY_PROVIDER = <votre-WIF-provider>
-  GCP_SERVICE_ACCOUNT_EMAIL = vil-jobs-runner@test-barometre-juridique.iam.gserviceaccount.com
-  ```
-- Push sur main déclenche automatiquement le workflow
+## 🎯 Résumé de l'État
 
-### Pour Phase 5 (Cloud Scheduler - Orchestration)
+**Completion**: 60% ✅ (Infra) + 10% ⏳ (Jobs) + 10% ⏳ (Scheduler) + 10% ⏳ (Frontend) + 10% ⏳ (Config)
 
-Créer des schedules pour chaque job:
+**Prêt à avancer**:
+- ✅ Infrastructure GCP entièrement configurée
+- ✅ GitHub OIDC prêt pour CI/CD automatisé
+- ✅ Secrets créés et accessibles
+- ⏳ En attente : Secrets GitHub + Push pour déclencher GitHub Actions
 
+**Blocage actuel** : Les secrets GitHub doivent être ajoutés pour que GitHub Actions puisse construire l'image Docker.
+
+---
+
+## 📞 Support
+
+Pour tester la configuration OIDC:
 ```bash
-# Exemple: Exécuter vil-load-corpus chaque jour à 2h du matin
-gcloud scheduler jobs create app-engine vil-daily-load-corpus \
-  --schedule="0 2 * * *" \
-  --time-zone="Europe/Paris" \
-  --http-method=POST \
-  --uri="https://europe-west9-run.googleapis.com/apis/run.googleapis.com/v1/projects/test-barometre-juridique/locations/europe-west9/jobs/vil-load-corpus:run" \
-  --service-account-email="vil-scheduler@test-barometre-juridique.iam.gserviceaccount.com" \
-  --location=europe-west9 \
-  --message-body='{}'
+bash scripts/test-github-oidc.sh
 ```
 
-### Pour Phase 6 (Frontend)
-
-- ⚠️ **À faire**: Choisir Vercel ou Cloud Run
-- ⚠️ **À faire**: Déployer l'application
-
----
-
-## 🧪 Vérifications Post-Déploiement
-
+Pour vérifier l'état des ressources GCP:
 ```bash
-# 1. Vérifier les jobs Cloud Run
-gcloud run jobs list --region=europe-west9 --filter="name:vil-"
+# Lister les artifacts
+gcloud artifacts docker images list europe-west9-docker.pkg.dev/test-barometre-juridique/vil-pipeline
 
-# 2. Vérifier le Cloud Scheduler
-gcloud scheduler jobs list --location=europe-west9
+# Lister les secrets
+gcloud secrets list --project=test-barometre-juridique
 
-# 3. Vérifier Neo4j Aura (accès)
-cypher-shell -a "neo4j+s://your-instance.databases.neo4j.io" \
-  -u "your-user" -p "your-password" \
-  "MATCH (n) RETURN COUNT(n) as count"
-
-# 4. Consulter les logs d'un job
-gcloud run jobs log vil-load-corpus --region=europe-west9 --limit=50
-
-# 5. Exécuter un job manuellement
-gcloud run jobs execute vil-load-corpus --region=europe-west9
+# Lister les service accounts
+gcloud iam service-accounts list --project=test-barometre-juridique
 ```
 
 ---
 
-## 💰 Coûts Estimés
-
-| Service | Usage | Coût/mois |
-|---------|-------|-----------|
-| Cloud Run Jobs | 100h | ~$10 |
-| Cloud Scheduler | 60 execs | ~$0.20 |
-| BigQuery | 1TB | ~$5-10 |
-| Cloud Storage | 10GB | ~$0.20 |
-| **Neo4j Aura** | Professional | ~$500 |
-| Artifact Registry | 10GB | ~$0.10 |
-| Frontend (Vercel) | Standard | ~$20 |
-| **TOTAL** | | **~$535** |
-
-> **Note**: Le coût majeur est Neo4j Aura. Étudiez les options de réduction si besoin.
-
----
-
-## 📚 Documentation
-
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Guide complet de déploiement (6 phases détaillées)
-- **[.github/workflows/deploy-pipeline.yml](./.github/workflows/deploy-pipeline.yml)** - Workflow GitHub Actions
-- **[Dockerfile](./pipeline/Dockerfile)** - Configuration Docker pour la pipeline
-
----
-
-## 🎯 Prochaines Actions (Recommandées)
-
-### Immédiat
-1. **Phase 4**: Exécuter le build Docker (local ou GitHub Actions)
-   - Estim. temps: 10-15 min
-
-### Court terme (Jour 1-2)
-2. **Phase 5**: Configurer Cloud Scheduler pour l'orchestration
-   - Estim. temps: 30 min
-
-3. **Phase 6**: Déployer le frontend
-   - Estim. temps: 5-10 min
-
-### Moyen terme (Jour 2-3)
-4. Configurer le monitoring et les alertes
-5. Tests fonctionnels complets
-6. Ajustement des coûts et des quotas
-
-### Long terme
-7. Mise en place du CI/CD complet
-8. Optimisation des performances
-9. Plan de scalabilité
-
----
-
-## 🚨 Points d'Attention
-
-### Authentification
-- ⚠️ gcloud CLI authentication peut être instable en environnement non-persistant
-- 💡 Solution: Exécuter Phase 4 sur votre machine locale
-
-### Secrets
-- ✅ Tous les secrets sont dans Secret Manager
-- ⚠️ Vérifier qu'aucun secret n'est committé en Git
-- 💡 Utiliser `git-secrets` pour prévention
-
-### Coûts
-- 💰 Coûts initiaux élevés à cause de Neo4j Aura (~$500/mois)
-- 💡 Étudiez les options de réduction ou migration
-
-### Image Docker
-- ⚠️ La taille peut être importante avec toutes les dépendances Python
-- 💡 Utilisez le cache Docker pour accélérer les builds
-
----
-
-## ✉️ Support
-
-Pour questions ou problèmes:
-1. Consultez [DEPLOYMENT.md](./DEPLOYMENT.md)
-2. Vérifiez les logs: `gcloud run jobs log <job-name>`
-3. Consultez la documentation Google Cloud officielle
-
----
-
-**Dernière mise à jour**: 2026-11-18  
-**Auteur**: Copilot AI Assistant  
-**Version**: 1.0
+**Généré par** : Copilot  
+**Dernière mise à jour** : 2026-11-18  
+**Validé avec** : `bash scripts/test-github-oidc.sh`
