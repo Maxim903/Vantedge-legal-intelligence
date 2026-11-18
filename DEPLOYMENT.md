@@ -190,37 +190,62 @@ Horaires d'exécution configurés :
 
 ---
 
-### PHASE 6️⃣: Déployer le Frontend (5-10 min)
+### PHASE 7️⃣: Déployer le Frontend (5-10 min)
 
-**Option A: Vercel (Recommandé)**
+✅ **Frontend déployé sur Google Cloud Run**
+
+**Déploiement Automatique (Recommandé)**
+
+Le workflow GitHub Actions `deploy-frontend.yml` s'exécute automatiquement quand:
+1. Un commit est poussé sur `main` avec des changements dans `apps/web/`
+2. Ou manuellement via GitHub Actions
+
+Workflow automatique:
 ```bash
-npm install -g vercel
-cd apps/web
-vercel deploy --prod
+# Simplement pusher sur main
+git add .
+git commit -m "Frontend update"
+git push origin main
+
+# Le workflow GitHub Actions se déclenche automatiquement
+# Suivi dans: https://github.com/Maxim903/Vantedge-legal-intelligence/actions
 ```
 
-**Option B: Cloud Run**
+**Déploiement Manuel**
+
+Si vous préférez déployer manuellement:
+
 ```bash
-cd apps/web
-docker build -t nextjs-app . -f - << 'DOCKERFILE'
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --frozen-lockfile
-COPY . .
-RUN npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-DOCKERFILE
+# 1. Build l'image Docker
+docker build -f apps/web/Dockerfile -t nextjs-app .
 
-docker tag nextjs-app gcr.io/PROJECT_ID/nextjs-app
-docker push gcr.io/PROJECT_ID/nextjs-app
+# 2. Tag l'image
+docker tag nextjs-app europe-west9-docker.pkg.dev/test-barometre-juridique/vil-frontend/vil-web:latest
 
-gcloud run deploy nextjs-app \
-  --image gcr.io/PROJECT_ID/nextjs-app \
-  --region europe-west9 \
-  --allow-unauthenticated
+# 3. Push vers Artifact Registry
+docker push europe-west9-docker.pkg.dev/test-barometre-juridique/vil-frontend/vil-web:latest
+
+# 4. Déployer sur Cloud Run
+gcloud run deploy vil-web \
+  --image=europe-west9-docker.pkg.dev/test-barometre-juridique/vil-frontend/vil-web:latest \
+  --region=europe-west9 \
+  --allow-unauthenticated \
+  --port=3000 \
+  --memory=1Gi \
+  --cpu=2 \
+  --max-instances=10
 ```
+
+**Service URL**
+
+Après déploiement, récupérez l'URL:
+```bash
+gcloud run services describe vil-web \
+  --region=europe-west9 \
+  --format="value(status.url)"
+```
+
+📖 **Voir**: [FRONTEND_DEPLOYMENT.md](FRONTEND_DEPLOYMENT.md) pour le guide détaillé
 
 ---
 

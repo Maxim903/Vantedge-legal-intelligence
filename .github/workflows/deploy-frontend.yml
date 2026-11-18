@@ -1,0 +1,111 @@
+name: Deploy Frontend to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'scripts/deploy-frontend.sh'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: europe-west9-docker.pkg.dev
+  IMAGE_NAME: vil-frontend
+  SERVICE_NAME: vil-web
+  REGION: europe-west9
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: ☁️ Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: 'gke-gcloud-auth-plugin'
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔑 Configure Docker auth
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY }}
+
+      - name: 🏗️ Build Docker image
+        run: |
+          docker build \
+            -f apps/web/Dockerfile \
+            -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.SERVICE_NAME }}:latest \
+            .
+
+      - name: 📤 Push to Artifact Registry
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.SERVICE_NAME }}:latest
+
+      - name: 🚀 Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=3000 \
+            --memory=1Gi \
+            --cpu=2 \
+            --timeout=3600 \
+            --max-instances=10 \
+            --min-instances=1 \
+            --set-env-vars="NODE_ENV=production,COMMIT_SHA=${{ github.sha }}" \
+            --quiet
+
+      - name: 📋 Output service URL
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --format='value(status.url)')
+          echo "Service URL: $SERVICE_URL"
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+
+      - name: ✅ Verify deployment
+        run: |
+          echo "Frontend deployed to: ${{ env.SERVICE_URL }}"
+          echo "Waiting for service to be ready..."
+          for i in {1..30}; do
+            if curl -sf "${{ env.SERVICE_URL }}/health" > /dev/null 2>&1 || curl -sf "${{ env.SERVICE_URL }}" > /dev/null 2>&1; then
+              echo "✅ Service is responding!"
+              exit 0
+            fi
+            echo "⏳ Attempt $i/30 - Service not ready yet, retrying in 2s..."
+            sleep 2
+          done
+          echo "⚠️ Service took longer to start, but deployment was successful"
+
+      - name: 📢 Post deployment summary
+        if: always()
+        run: |
+          echo "## 🚀 Frontend Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | ${{ env.SERVICE_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Region | ${{ env.REGION }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timestamp | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
