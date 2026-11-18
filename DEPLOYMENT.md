@@ -24,6 +24,83 @@ Data Layer
 
 ## 📋 Étapes de Déploiement
 
+### PHASE 0️⃣: Configurer GitHub OIDC pour GitHub Actions (2-3 min)
+
+**✅ Configuration déjà créée pour le projet `test-barometre-juridique`**
+
+Les ressources suivantes ont été créées :
+- Workload Identity Pool : `github-action`
+- Provider OIDC : `github-provider`
+- Service Account : `github-actions@test-barometre-juridique.iam.gserviceaccount.com`
+
+**À faire : Ajouter les secrets GitHub**
+
+1. Allez sur votre repository GitHub : https://github.com/Maxim903/Vantedge-legal-intelligence
+2. Cliquez sur **Settings** > **Secrets and variables** > **Actions**
+3. Créez 3 secrets (New repository secret) :
+
+| Secret | Valeur |
+|--------|--------|
+| `GCP_PROJECT_ID` | `test-barometre-juridique` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/31886648583/locations/global/workloadIdentityPools/github-action/providers/github-provider` |
+| `GCP_SERVICE_ACCOUNT` | `github-actions@test-barometre-juridique.iam.gserviceaccount.com` |
+
+Exemple de workflow GitHub Actions utilisant OIDC :
+
+```yaml
+name: Deploy Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: europe-west9-docker.pkg.dev
+  IMAGE_NAME: vil-pipeline
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY }}
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -f pipeline/Dockerfile \
+            -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/vil-pipeline/vil-pipeline:latest \
+            -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/vil-pipeline/vil-pipeline:${{ github.sha }} .
+          
+          docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/vil-pipeline/vil-pipeline:latest
+          docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/vil-pipeline/vil-pipeline:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run jobs update vil-load-corpus \
+            --image=${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/vil-pipeline/vil-pipeline:latest \
+            --region=europe-west9 \
+            --project=${{ secrets.GCP_PROJECT_ID }}
+```
+
+---
+
 ### PHASE 1️⃣: Setup Infra Google Cloud (5-10 min)
 
 ```bash
