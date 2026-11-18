@@ -3,6 +3,8 @@ import { updateSession } from "@/lib/supabase/update-session";
 
 export async function proxy(request: NextRequest) {
   if (
+    request.nextUrl.pathname === "/demo" ||
+    request.nextUrl.pathname.startsWith("/demo/") ||
     ["/mentions-legales", "/cgu", "/confidentialite"].includes(
       request.nextUrl.pathname,
     )

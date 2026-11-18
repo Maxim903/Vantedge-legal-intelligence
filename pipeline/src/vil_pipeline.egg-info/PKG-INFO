@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: vil-pipeline
+Version: 0.1.0
+Summary: Pipeline de données pour Vantedge Legal Intelligence
+Requires-Python: >=3.12
+Requires-Dist: pydantic
+Requires-Dist: pydantic-settings
+Requires-Dist: structlog
+Requires-Dist: typer
+Requires-Dist: tenacity
+Requires-Dist: httpx
+Requires-Dist: google-cloud-bigquery
+Requires-Dist: google-cloud-storage
+Requires-Dist: lxml
+Requires-Dist: neo4j<6,>=5.26
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: respx; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Provides-Extra: dbt
+Requires-Dist: dbt-bigquery; extra == "dbt"

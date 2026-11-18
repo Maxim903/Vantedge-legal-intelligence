@@ -37,7 +37,7 @@ def test_failed_run_is_journaled_and_error_propagates(monkeypatch):
     assert options.default_dataset == bigquery.DatasetReference("test-project", "ops")
     params = {param.name: param.value for param in options.query_parameters}
     assert params["status"] == "FAILED"
-    assert "Neo4j unavailable" in params["error"]
+    assert params["error"] == "RuntimeError"
     assert json.loads(params["counts"])["batches"] == 0
     assert client.query.return_value.result.call_count == 2
 

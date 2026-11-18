@@ -21,6 +21,12 @@ export default function Home() {
       </div>
       <nav aria-label="Accès à l’application" className="flex flex-wrap gap-3">
         <Link
+          href="/demo"
+          className={`${linkStyle} border border-blue-700 text-blue-800 dark:border-blue-400 dark:text-blue-300`}
+        >
+          Voir la démo
+        </Link>
+        <Link
           href="/connexion"
           className={`${linkStyle} bg-black text-white dark:bg-white dark:text-black`}
         >

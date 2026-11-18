@@ -149,7 +149,7 @@ def test_cost_is_logged_even_if_gcs_archiving_fails(monkeypatch):
 	assert bq.insert.call_args.args[1][0]["lot_id"] == start["run_id"]
 	assert finish["run_id"] == start["run_id"]
 	assert finish["status"] == "FAILED"
-	assert finish["error"] == "RuntimeError: GCS unavailable"
+	assert finish["error"] == "RuntimeError"
 	assert finish["cost"] == Decimal("0.075")
 	assert json.loads(finish["counts"])["calls"] == 1
 
@@ -176,7 +176,8 @@ def test_cost_write_failure_is_tracked_and_retains_archive_failure(
 	assert bq.query.call_count == 3
 	finish = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
 	assert finish["status"] == "FAILED"
-	assert "2 sub-exceptions" in finish["error"]
+	assert finish["error"].startswith(type(raised.value).__name__)
+	assert "ValueError" in finish["error"]
 	assert finish["cost"] == Decimal("0.075")
 	assert json.loads(finish["counts"]) == {
 		"status": "FAILED", "read": 1, "cached": 0, "calls": 1,

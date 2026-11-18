@@ -163,7 +163,7 @@ def test_failed_write_preserves_counts_and_error():
 	assert bq.query.call_count == 3
 	params = {p.name: p.value for p in bq.query.call_args_list[-1].args[1]}
 	assert params["status"] == "FAILED"
-	assert params["error"] == "RuntimeError: write failed"
+	assert params["error"] == "RuntimeError"
 	assert json.loads(params["counts"])["classified"] == 1
 
 

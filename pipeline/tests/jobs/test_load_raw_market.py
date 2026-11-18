@@ -131,7 +131,7 @@ def test_failed_load_is_not_recorded_and_retried_without_duplicates():
 	with pytest.raises(RuntimeError):
 		load_raw_market(bq, gcs)
 	assert bq.runs[-1]["status"] == "FAILED"
-	assert "load failed" in bq.runs[-1]["error"]
+	assert bq.runs[-1]["error"] == "RuntimeError"
 	assert json.loads(bq.runs[-1]["counts"])["archives_loaded"] == 2
 	bq.fail_on = None
 	recorded = {r["archive_blob"] for r in bq.tables["ops.archives_chargees"]}
