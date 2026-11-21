@@ -1,5 +1,6 @@
 """Tests for the pipeline command-line interface."""
 
+import re
 import tarfile
 from decimal import Decimal
 from pathlib import Path
@@ -55,16 +56,17 @@ def test_load_corpus_command_requires_archive_option():
 	result = runner.invoke(cli.app, ["load-corpus"])
 
 	assert result.exit_code != 0
-	assert "--archive" in result.output
+	assert "--archive" in re.sub(r"\x1b\[[0-9;]*m", "", result.output)
 
 
 def test_load_corpus_command_help_lists_requested_options():
 	result = runner.invoke(cli.app, ["load-corpus", "--help"])
 
 	assert result.exit_code == 0
-	assert "--archive" in result.output
-	assert "--livre" in result.output
-	assert "--dry-run" in result.output
+	output = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+	assert "--archive" in output
+	assert "--livre" in output
+	assert "--dry-run" in output
 
 
 def test_migrate_command_uses_configured_project_and_location(monkeypatch):

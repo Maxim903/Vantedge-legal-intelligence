@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getDemoNotion } from "@/features/demo/data";
 
 export const metadata: Metadata = { title: "Détail — Démo locale" };
+export const instant = false;
 
 export default async function DemoNotionPage({
   params,
