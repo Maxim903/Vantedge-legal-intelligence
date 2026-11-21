@@ -84,6 +84,8 @@ for (const colorScheme of ["light", "dark"] as const) {
     }) => {
       await page.goto("/");
       await page.keyboard.press("Tab");
+      await expectVisibleFocus(page.getByRole("link", { name: "Voir la démo" }));
+      await page.keyboard.press("Tab");
       await expectVisibleFocus(
         page.getByRole("link", { name: "Se connecter" }),
       );
