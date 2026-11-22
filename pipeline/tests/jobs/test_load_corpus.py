@@ -55,6 +55,7 @@ def test_iter_corpus_uses_livre_i_by_default():
 
 
 def test_main_exposes_configurable_livre_parameter(tmp_path, monkeypatch, capsys):
+	monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
 	source = tmp_path / "article.xml"
 	source.write_bytes((FIXTURES_DIR / "article_vigueur.xml").read_bytes())
 	monkeypatch.setattr(
@@ -213,6 +214,7 @@ def test_main_dry_run_creates_client_for_tracking(
 	monkeypatch,
 	capsys,
 ):
+	monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
 	fixture = tmp_path / "article.xml"
 	fixture.write_bytes((FIXTURES_DIR / "article_vigueur.xml").read_bytes())
 	monkeypatch.setattr(

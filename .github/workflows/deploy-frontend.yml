@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps/web/**'
-      - 'scripts/deploy-frontend.sh'
-      - '.github/workflows/deploy-frontend.yml'
-  workflow_dispatch:  # Allow manual trigger
+      - "apps/web/**"
+      - "scripts/deploy-frontend.sh"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch: # Allow manual trigger
 
 env:
   REGISTRY: europe-west9-docker.pkg.dev
@@ -19,8 +19,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: "read"
+      id-token: "write"
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      STRIPE_PRICE_PRO: ${{ vars.STRIPE_PRICE_PRO }}
 
     steps:
       - name: 📥 Checkout code
@@ -35,7 +39,13 @@ jobs:
       - name: ☁️ Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
-          install_components: 'gke-gcloud-auth-plugin'
+          install_components: "gke-gcloud-auth-plugin"
+
+      - name: Verify Artifact Registry repository
+        run: |
+          gcloud artifacts repositories describe "${{ env.IMAGE_NAME }}" \
+            --location="${{ env.REGION }}" \
+            --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null
 
       - name: 🐳 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -46,8 +56,13 @@ jobs:
 
       - name: 🏗️ Build Docker image
         run: |
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$STRIPE_PRICE_PRO"
           docker build \
             -f apps/web/Dockerfile \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
             -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}/${{ env.SERVICE_NAME }}:latest \
             .
@@ -64,6 +79,7 @@ jobs:
             --region=${{ env.REGION }} \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --platform=managed \
+            --service-account=31886648583-compute@developer.gserviceaccount.com \
             --allow-unauthenticated \
             --port=3000 \
             --memory=1Gi \
@@ -71,10 +87,12 @@ jobs:
             --timeout=3600 \
             --max-instances=10 \
             --min-instances=1 \
-            --set-env-vars="NODE_ENV=production,COMMIT_SHA=${{ github.sha }}" \
+            --set-env-vars="NODE_ENV=production,COMMIT_SHA=${{ github.sha }},GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},BQ_LOCATION=${{ env.REGION }},BQ_DATASET=marts,STRIPE_PRICE_PRO=$STRIPE_PRICE_PRO" \
+            --set-secrets="SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest,STRIPE_SECRET_KEY=stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=stripe-webhook-secret:latest" \
             --quiet
 
       - name: 📋 Output service URL
+        id: service
         run: |
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
             --region=${{ env.REGION }} \
@@ -82,20 +100,27 @@ jobs:
             --format='value(status.url)')
           echo "Service URL: $SERVICE_URL"
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          gcloud run services update ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --update-env-vars="APP_URL=$SERVICE_URL" \
+            --quiet
 
       - name: ✅ Verify deployment
         run: |
-          echo "Frontend deployed to: ${{ env.SERVICE_URL }}"
+          echo "Frontend deployed to: ${{ steps.service.outputs.url }}"
           echo "Waiting for service to be ready..."
           for i in {1..30}; do
-            if curl -sf "${{ env.SERVICE_URL }}/health" > /dev/null 2>&1 || curl -sf "${{ env.SERVICE_URL }}" > /dev/null 2>&1; then
+            if curl -sf "${{ steps.service.outputs.url }}/" > /dev/null 2>&1; then
               echo "✅ Service is responding!"
               exit 0
             fi
             echo "⏳ Attempt $i/30 - Service not ready yet, retrying in 2s..."
             sleep 2
           done
-          echo "⚠️ Service took longer to start, but deployment was successful"
+          echo "❌ Service did not respond after deployment"
+          exit 1
 
       - name: 📢 Post deployment summary
         if: always()

@@ -68,6 +68,8 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Generate Next.js types
+        run: npx next typegen
       - name: Type-check
         run: npx tsc --noEmit
       - name: Vitest
@@ -109,6 +111,7 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ vars.E2E_GCP_PROJECT_ID }}
       BQ_LOCATION: europe-west9
+      BQ_DATASET: marts_e2e
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
       STRIPE_API_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
       STRIPE_PRICE_PRO: ${{ vars.E2E_STRIPE_PRICE_PRO }}
@@ -134,9 +137,8 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Préparer le jeu BigQuery dédié
         run: |
-          if ! bq show "$GCP_PROJECT_ID:marts" >/dev/null 2>&1; then
-            bq mk --dataset --location="$BQ_LOCATION" "$GCP_PROJECT_ID:marts"
-          fi
+          bq mk --dataset --location="$BQ_LOCATION" "$GCP_PROJECT_ID:$BQ_DATASET" || \
+            bq show --format=prettyjson "$GCP_PROJECT_ID:$BQ_DATASET" | jq -e --arg location "$BQ_LOCATION" '.location == $location' >/dev/null
           bq query --project_id="$GCP_PROJECT_ID" --location="$BQ_LOCATION" --use_legacy_sql=false < apps/web/e2e/fixtures/marts.sql
       - uses: supabase/setup-cli@v1
         with:

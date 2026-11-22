@@ -30,10 +30,15 @@ dbt/*
 !dbt/models/
 !dbt/seeds/
 !dbt/tests/
+!apps/
+!apps/web/
+!apps/web/**
 
 **/__pycache__/
 **/*.py[cod]
 **/*.egg-info/
+**/node_modules/
+**/.next/
 **/.env*
 **/*.pem
 **/*.key
