@@ -68,6 +68,8 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Generate Next.js types
+        run: npx next typegen
       - name: Type-check
         run: npx tsc --noEmit
       - name: Vitest
@@ -109,6 +111,7 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ vars.E2E_GCP_PROJECT_ID }}
       BQ_LOCATION: europe-west9
+      BQ_DATASET: marts_e2e
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
       STRIPE_API_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
       STRIPE_PRICE_PRO: ${{ vars.E2E_STRIPE_PRICE_PRO }}
@@ -134,9 +137,8 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Préparer le jeu BigQuery dédié
         run: |
-          if ! bq show "$GCP_PROJECT_ID:marts" >/dev/null 2>&1; then
-            bq mk --dataset --location="$BQ_LOCATION" "$GCP_PROJECT_ID:marts"
-          fi
+          bq mk --dataset --location="$BQ_LOCATION" "$GCP_PROJECT_ID:$BQ_DATASET" || \
+            bq show --format=prettyjson "$GCP_PROJECT_ID:$BQ_DATASET" | jq -e --arg location "$BQ_LOCATION" '.location == $location' >/dev/null
           bq query --project_id="$GCP_PROJECT_ID" --location="$BQ_LOCATION" --use_legacy_sql=false < apps/web/e2e/fixtures/marts.sql
       - uses: supabase/setup-cli@v1
         with:
@@ -164,18 +166,40 @@ jobs:
           sudo apt-get install -y stripe
       - name: Transférer les webhooks Stripe de test
         run: |
-          secret="$(stripe listen --print-secret)"
-          case "$secret" in whsec_*) ;; *) echo "Secret webhook absent" >&2; exit 1 ;; esac
+          secret="$(stripe listen \
+            --api-key "$STRIPE_API_KEY" \
+            --device-name "$STRIPE_DEVICE_NAME" \
+            --print-secret \
+            2>&1)"
+          case "$secret" in whsec_*) ;; *)
+            echo "Secret webhook absent" >&2
+            echo "$secret" >&2
+            exit 1
+          ;; esac
+
           echo "::add-mask::$secret"
           echo "STRIPE_WEBHOOK_SECRET=$secret" >> "$GITHUB_ENV"
-          stripe listen --forward-to http://127.0.0.1:3000/api/stripe/webhook > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
+
+          stripe listen \
+            --api-key "$STRIPE_API_KEY" \
+            --device-name "$STRIPE_DEVICE_NAME" \
+            --events checkout.session.completed,customer.subscription.updated,customer.subscription.deleted \
+            --forward-to http://127.0.0.1:3000/api/stripe/webhook \
+            > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/stripe-listen.pid"
+
           for attempt in $(seq 1 30); do
             if grep -q 'Ready!' "$RUNNER_TEMP/stripe-listen.log"; then exit 0; fi
-            if ! kill -0 "$(cat "$RUNNER_TEMP/stripe-listen.pid")" 2>/dev/null; then echo "Stripe CLI arrêté" >&2; exit 1; fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/stripe-listen.pid")" 2>/dev/null; then
+              echo "Stripe CLI arrêté" >&2
+              cat "$RUNNER_TEMP/stripe-listen.log" >&2
+              exit 1
+            fi
             sleep 1
           done
+
           echo "Stripe CLI indisponible" >&2
+          cat "$RUNNER_TEMP/stripe-listen.log" >&2
           exit 1
       - name: Installer les dépendances et Chromium
         working-directory: apps/web

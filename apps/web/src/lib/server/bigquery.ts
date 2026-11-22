@@ -6,6 +6,7 @@ import { requireEnv } from "@/lib/server/env";
 const MAX_QUERY_DURATION_MS = 15_000;
 const MAX_QUERY_ROWS = 1_000;
 const DEFAULT_LOCATION = "europe-west9";
+const datasetSchema = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,1023}$/);
 
 type QueryParameterValue =
   | string
@@ -42,8 +43,9 @@ async function fetchRows(
   params: QueryParameters,
 ): Promise<unknown[]> {
   const location = getLocation();
+  const dataset = datasetSchema.parse(process.env.BQ_DATASET ?? "marts");
   const [job] = await getClient().createQueryJob({
-    query: sql,
+    query: sql.replaceAll("`marts.", `\`${dataset}.`),
     params,
     location,
     jobTimeoutMs: MAX_QUERY_DURATION_MS,

@@ -63,6 +63,9 @@ Le workflow `.github/workflows/deploy-pipeline.yml` fait :
 - 🔄 Pull Request sur `main`
 - ⚙️ Workflow dispatch (manuel)
 
+Les pull requests construisent l'image sans authentification Google Cloud ni
+publication. L'authentification reste nécessaire pour les autres déclencheurs.
+
 ## 📋 Vérification
 
 Pour tester que tout fonctionne :

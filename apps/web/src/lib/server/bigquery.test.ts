@@ -21,6 +21,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("GCP_PROJECT_ID", "test-project");
   vi.stubEnv("BQ_LOCATION", "europe-west1");
+  vi.stubEnv("BQ_DATASET", undefined);
   bigQueryConstructor.mockImplementation(function BigQueryMock() {
     return { createQueryJob };
   });
@@ -61,6 +62,20 @@ describe("query BigQuery", () => {
     getQueryResults.mockResolvedValue([[{ id: "invalide" }], null]);
 
     await expect(query("SELECT id", {}, rowSchema)).rejects.toThrow();
+  });
+
+  it("utilise le dataset configuré pour les tables marts", async () => {
+    vi.stubEnv("BQ_DATASET", "marts_e2e");
+    await query("SELECT * FROM `marts.dim_notion`", {}, rowSchema);
+    expect(createQueryJob).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "SELECT * FROM `marts_e2e.dim_notion`" }),
+    );
+  });
+
+  it("rejette un identifiant de dataset invalide avant toute requête", async () => {
+    vi.stubEnv("BQ_DATASET", "marts` WHERE true; --");
+    await expect(query("SELECT * FROM `marts.dim_notion`", {}, rowSchema)).rejects.toThrow();
+    expect(createQueryJob).not.toHaveBeenCalled();
   });
 
   it("rejette les résultats au-delà de la limite sans charger les pages suivantes", async () => {

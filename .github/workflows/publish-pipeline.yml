@@ -1,42 +1,129 @@
-name: Publish pipeline image
+name: Build, test and deploy pipeline
 
 on:
   push:
     branches: [main]
+    paths:
+      - "pipeline/**"
+      - "graph/**"
+      - "dbt/**"
+      - "docs/05-ia/**"
+      - ".github/workflows/publish-pipeline.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "pipeline/**"
+      - "graph/**"
+      - "dbt/**"
+      - "docs/05-ia/**"
+      - ".github/workflows/publish-pipeline.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
 
+env:
+  REGISTRY: europe-west9-docker.pkg.dev
+  REGION: europe-west9
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  IMAGE_REPOSITORY: vil-pipeline
+  CORPUS_BUCKET: ${{ vars.CORPUS_BUCKET }}
+  CORPUS_OBJECT: ${{ vars.CORPUS_OBJECT }}
+  EXTRACTION_MAX_COST: ${{ vars.EXTRACTION_MAX_COST }}
+  EXTRACTION_COST_PER_CALL: ${{ vars.EXTRACTION_COST_PER_CALL }}
+
 jobs:
-  publish:
+  build-test-publish-deploy:
     runs-on: ubuntu-latest
-    env:
-      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Validate registry configuration
+      - name: Définir les références d'image
+        id: image
         run: |
-          [[ "$GCP_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || { echo "Invalid GCP_PROJECT_ID" >&2; exit 1; }
-          [[ "$ARTIFACT_REGISTRY_REPOSITORY" =~ ^[a-z0-9][a-z0-9._-]{0,62}$ ]] || { echo "Invalid ARTIFACT_REGISTRY_REPOSITORY" >&2; exit 1; }
-          echo "IMAGE=europe-west9-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/vil-pipeline:${GITHUB_SHA}" >> "$GITHUB_ENV"
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_ARTIFACT_REGISTRY_SERVICE_ACCOUNT }}
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - name: Configure registry authentication
-        run: gcloud auth configure-docker europe-west9-docker.pkg.dev --quiet
+          echo "local=vil-pipeline:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" != pull_request && "$GITHUB_REF" == refs/heads/main ]]; then
+            [[ "$GCP_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || { echo "GCP_PROJECT_ID invalide" >&2; exit 1; }
+            echo "remote=${REGISTRY}/${GCP_PROJECT_ID}/${IMAGE_REPOSITORY}/vil-pipeline:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build image
-        run: docker build --file pipeline/Dockerfile --tag "$IMAGE" .
+        run: docker build --file pipeline/Dockerfile --tag "${{ steps.image.outputs.local }}" .
       - name: Smoke-test image
         run: |
-          docker run --rm "$IMAGE" --help
-          docker run --rm --entrypoint python "$IMAGE" -c "import os; from vil_pipeline.apply_migrations import DEFAULT_MIGRATIONS_DIR; from vil_pipeline.graph.apply_constraints import DEFAULT_CONSTRAINTS_FILE; from vil_pipeline.jobs.evaluate_extraction import DEFAULT_GOLDEN, DEFAULT_TITLES; from prompts.loader import load_prompt; assert os.getuid() != 0; assert list(DEFAULT_MIGRATIONS_DIR.glob('*.sql')); assert DEFAULT_CONSTRAINTS_FILE.is_file(); assert DEFAULT_GOLDEN.is_file() and DEFAULT_TITLES.is_file(); assert load_prompt()[0]"
-          docker run --rm --entrypoint python "$IMAGE" -m graph --help
-          docker run --rm --entrypoint dbt "$IMAGE" --version
-          docker run --rm -e GCP_PROJECT_ID=build-placeholder --entrypoint dbt "$IMAGE" parse --project-dir /app/dbt --profiles-dir /app/dbt
-      - name: Push image
-        run: docker push "$IMAGE"
+          image="${{ steps.image.outputs.local }}"
+          docker run --rm "$image" --help
+          docker run --rm --entrypoint python "$image" -c "import os; from vil_pipeline.apply_migrations import DEFAULT_MIGRATIONS_DIR; from vil_pipeline.graph.apply_constraints import DEFAULT_CONSTRAINTS_FILE; from vil_pipeline.jobs.evaluate_extraction import DEFAULT_GOLDEN, DEFAULT_TITLES; from prompts.loader import load_prompt; assert os.getuid() != 0; assert list(DEFAULT_MIGRATIONS_DIR.glob('*.sql')); assert DEFAULT_CONSTRAINTS_FILE.is_file(); assert DEFAULT_GOLDEN.is_file() and DEFAULT_TITLES.is_file(); assert load_prompt()[0]"
+          docker run --rm --entrypoint python "$image" -m graph --help
+          docker run --rm --entrypoint dbt "$image" --version
+          docker run --rm -e GCP_PROJECT_ID=build-placeholder --entrypoint dbt "$image" parse --project-dir /app/dbt --profiles-dir /app/dbt
+      - uses: google-github-actions/auth@v2
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      - name: Configure registry authentication
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          gcloud auth configure-docker "$REGISTRY" --quiet
+      - name: Push immutable image
+        id: publish
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ${{ steps.image.outputs.remote }}
+          LOCAL_IMAGE: ${{ steps.image.outputs.local }}
+        run: |
+          docker tag "$LOCAL_IMAGE" "$IMAGE"
+          docker push "$IMAGE"
+          echo "ref=$IMAGE" >> "$GITHUB_OUTPUT"
+      - name: Update Cloud Run Jobs
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ${{ steps.publish.outputs.ref }}
+        run: |
+          test -n "$CORPUS_BUCKET"
+          test -n "$CORPUS_OBJECT"
+          test -n "$EXTRACTION_MAX_COST"
+          test -n "$EXTRACTION_COST_PER_CALL"
+          [[ "$CORPUS_BUCKET" =~ ^[a-z0-9][a-z0-9._-]*[a-z0-9]$ ]]
+          [[ "$CORPUS_OBJECT" =~ ^[A-Za-z0-9_./-]+$ && "$CORPUS_OBJECT" != /* ]]
+          case "/$CORPUS_OBJECT/" in */../*|*/./*) echo "Chemin de corpus invalide" >&2; exit 1 ;; esac
+          for amount in "$EXTRACTION_MAX_COST" "$EXTRACTION_COST_PER_CALL"; do
+            [[ "$amount" =~ ^[0-9]+([.][0-9]{1,9})?$ ]] || { echo "Budget d'extraction invalide" >&2; exit 1; }
+          done
+          [[ "$EXTRACTION_COST_PER_CALL" =~ [1-9] ]] || { echo "Le coût par appel doit être positif" >&2; exit 1; }
+
+          common=(
+            "--image=$IMAGE"
+            "--region=$REGION"
+            "--project=$GCP_PROJECT_ID"
+            "--service-account=vil-jobs-runner@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
+            "--command=/bin/sh"
+            "--set-env-vars=GCP_PROJECT_ID=$GCP_PROJECT_ID,BQ_LOCATION=$REGION"
+            --quiet
+          )
+
+          gcloud run jobs update vil-load-corpus "${common[@]}" \
+            "--args=/app/pipeline/job-entrypoint.sh,load-corpus,--archive,/mnt/corpus/$CORPUS_OBJECT" \
+            --clear-volumes \
+            --clear-volume-mounts \
+            "--add-volume=name=corpus,type=cloud-storage,bucket=$CORPUS_BUCKET,readonly=true" \
+            "--add-volume-mount=volume=corpus,mount-path=/mnt/corpus"
+
+          gcloud run jobs update vil-extract-notions "${common[@]}" \
+            "--args=/app/pipeline/job-entrypoint.sh,extract-entities,--max-cost,$EXTRACTION_MAX_COST,--cost-per-call,$EXTRACTION_COST_PER_CALL" \
+            --update-secrets=/secrets/llm/key=llm-api-key:latest
+
+          gcloud run jobs update vil-gap-analysis "${common[@]}" \
+            --args=/app/pipeline/job-entrypoint.sh,dbt,--select,+fait_gap_score
+
+          for job in vil-load-corpus vil-extract-notions vil-gap-analysis; do
+            actual_image=$(gcloud run jobs describe "$job" \
+              --region="$REGION" \
+              --project="$GCP_PROJECT_ID" \
+              --format=json | jq -r '[.. | objects | .image? // empty] | first')
+            test "$actual_image" = "$IMAGE"
+          done

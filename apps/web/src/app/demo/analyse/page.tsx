@@ -3,6 +3,7 @@ import Link from "next/link";
 import { demoNotions, demoSituations } from "@/features/demo/data";
 
 export const metadata: Metadata = { title: "Analyses — Démo locale" };
+export const instant = false;
 
 type Props = {
   searchParams: Promise<{ situation?: string; tri?: string; ordre?: string }>;
