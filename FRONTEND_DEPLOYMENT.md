@@ -36,6 +36,16 @@ Secrets requise dans GitHub:
 - `GCP_WORKLOAD_IDENTITY_PROVIDER` = `projects/31886648583/locations/global/workloadIdentityPools/github-action/providers/github-provider`
 - `GCP_SERVICE_ACCOUNT` = `github-actions@test-barometre-juridique.iam.gserviceaccount.com`
 
+Variables de dépôt GitHub requises pour compiler le client Supabase:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `STRIPE_PRICE_PRO`
+
+Ne pas utiliser la clé Supabase `service_role` comme variable `NEXT_PUBLIC_*`.
+Le dépôt Artifact Registry `vil-frontend` doit exister avant le lancement du workflow.
+Le service Cloud Run référence les secrets `supabase-service-role-key`, `stripe-secret-key` et `stripe-webhook-secret`.
+
 ### Pour déploiement manuel
 
 ```bash
