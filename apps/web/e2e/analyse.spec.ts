@@ -52,13 +52,17 @@ test("inscription, abonnement, ouverture et historique", async ({ page }) => {
   await assertAccessibilityBothThemes(page);
   await page.getByRole("button", { name: "Souscrire au plan pro" }).click();
   await page.waitForURL(/https:\/\/checkout\.stripe\.com\//);
-  await page.locator("#cardNumber").fill("4242424242424242");
-  await page.locator("#cardExpiry").fill("1234");
-  await page.locator("#cardCvc").fill("123");
-  await page.locator("#billingName").fill("Utilisateur Test");
-  const country = page.locator("#billingCountry");
+  await page.getByLabel(/card number|numéro de carte/i).fill("4242424242424242");
+  await page
+    .getByLabel(/expiration|expiry|date d'expiration/i)
+    .fill("1234");
+  await page.getByLabel(/security code|cvc|code de sécurité/i).fill("123");
+  await page
+    .getByLabel(/name on card|nom sur la carte/i)
+    .fill("Utilisateur Test");
+  const country = page.getByLabel(/country|pays/i);
   if (await country.isVisible()) await country.selectOption("FR");
-  const postalCode = page.locator("#billingPostalCode");
+  const postalCode = page.getByLabel(/postal code|zip code|code postal/i);
   if (await postalCode.isVisible()) await postalCode.fill("75001");
   await page.locator('button[type="submit"]').click();
   await page.waitForURL("**/app/compte?checkout=succes", { timeout: 90_000 });
