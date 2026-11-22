@@ -1,295 +1,77 @@
-# 📊 Statut de Déploiement - Vantedge Legal Intelligence
+# État du déploiement
 
-**Dernière mise à jour**: 2026-11-18 21:34 UTC  
-**Status Global**: 🟢 **OPÉRATIONNEL** - Repo rendu public, déploiement frontend activé!
+**Vérifié le :** 2026-11-22
+**Projet :** `test-barometre-juridique`
+**Région :** `europe-west9`
+**État global :** non déployé; les jobs Cloud Run et les schedulers existent, mais le frontend et l'image pipeline ne sont pas opérationnels.
 
----
+## État GCP vérifié
 
-## ✅ Phases de Déploiement Complétées
+| Ressource | État observé |
+|---|---|
+| Services Cloud Run | Aucun service; `vil-web` n'existe pas. |
+| Jobs Cloud Run | `vil-load-corpus`, `vil-extract-notions` et `vil-gap-analysis` existent, mais utilisent `gcr.io/google.com/cloudsdktool/cloud-sdk:slim`, sans compte de service explicite, commande ni arguments. Aucune exécution récente n'a été trouvée. |
+| Cloud Scheduler | Les trois schedulers existent et sont activés : 02:00, 04:00 et 06:00 UTC. Leur activation ne prouve pas le succès des jobs. |
+| Artifact Registry | `vil-frontend` et `vil-pipeline` existent. Aucune image n'est publiée dans `vil-pipeline`; `vil-frontend` est vide. |
+| BigQuery | `marts` existe en `europe-west9` avec 22 tables. `marts_e2e` n'existe pas encore; le workflow CI le créera lors de son exécution. |
+| Secret Manager | Onze secrets ont une version active : `llm-api-key`, `dataforseo-login`, `dataforseo-password`, `neo4j-uri`, `neo4j-user`, `neo4j-password`, `supabase-url`, `supabase-key`, `supabase-service-role-key`, `stripe-secret-key`, `stripe-webhook-secret`. |
+| Contenu des secrets | Les trois nouveaux noms ont une version active et des bindings Secret Accessor pour le compte frontend. Leur contenu n'a pas été lu ni validé contre Supabase/Stripe. La nature de `supabase-key` reste indéterminée; ne pas l'utiliser comme clé service-role. |
+| Comptes d'exécution | `vil-jobs-runner` a BigQuery Data Editor, Storage Object User et Secret Manager Secret Accessor au niveau projet; le compte GitHub Actions peut maintenant agir comme ce compte. Le compte Compute par défaut a BigQuery Data Editor et un accès Secret Accessor par secret aux trois clés serveur du frontend. |
 
-### PHASE 0️⃣: GitHub OIDC - ✅ Complétée
-- ✅ Workload Identity Pool créé: `github-action`
-- ✅ OIDC Provider configuré: `github-provider`
-- ✅ Service Account configuré: `github-actions@test-barometre-juridique.iam.gserviceaccount.com`
-- ✅ Secrets GitHub créés (3 secrets)
+Les valeurs de secrets n'ont pas été affichées. L'état des variables/secrets GitHub n'a pas pu être vérifié : la CLI `gh` n'est pas disponible dans ce Codespace. Les connexions réelles à Supabase, Neo4j, DataForSEO et Stripe n'ont pas été testées.
 
-**Statut**: Prêt pour GitHub Actions
+## État du code
 
----
+Les corrections sont sur la branche locale `fix/infra-alignment`; elles ne sont ni poussées ni fusionnées.
 
-### PHASE 1️⃣: Infrastructure GCP - ✅ Complétée
-- ✅ APIs activées (16 APIs actives):
-  - Cloud Run
-  - Cloud Scheduler
-  - BigQuery
-  - Cloud Storage
-  - Cloud Monitoring
-  - Cloud Logging
-  - Artifact Registry
-  - Secret Manager
-  - Et 8 autres...
+- E2E BigQuery : la fixture cible `marts_e2e`; le workflow crée le dataset en `europe-west9` ou vérifie sa localisation s'il existe déjà.
+- Pipeline : `publish-pipeline.yml` est le workflow unique. Il construit et teste l'image, la publie avec le SHA du commit, puis configure les trois jobs avec `vil-jobs-runner`, leurs commandes et leurs variables. `vil-gap-analysis` lance `dbt build --select +fait_gap_score`. Le test local `dbt ls` n'a pas pu démarrer : `dbt-core-experimental-parser` ne fournit pas de wheel pour l'environnement courant.
+- Frontend : les variables publiques Supabase sont transmises comme build-args. Le déploiement sélectionne explicitement le compte Compute par défaut, référence les secrets serveur Supabase/Stripe et exige `STRIPE_PRICE_PRO`.
+- Docker : le Docker-in-Docker est déjà déclaré dans `.devcontainer/devcontainer.json`; reconstruire le Codespace devrait l'activer. Le binaire Docker n'était pas disponible pendant la vérification, donc les images n'ont pas été construites.
 
-**Statut**: Infrastructure cloud complète et fonctionnelle
+## Blocages à lever
 
----
+1. Configurer les variables et secrets GitHub attendus par les workflows; leur présence reste à confirmer.
+2. Valider que les valeurs des trois nouveaux secrets correspondent aux clés Supabase service-role et Stripe attendues, puis vérifier les connexions depuis le service.
+3. Reconstruire le Codespace, puis construire et tester les deux images Docker.
+4. Configurer les variables GitHub pipeline listées ci-dessous. Le workflow configure les trois jobs existants; le script manuel `scripts/deploy_jobs.sh` cible encore six autres noms et ne doit pas servir de référence avant alignement. La sélection dbt n'est pas validée localement à cause de la dépendance indisponible sur cette plateforme.
+5. Publier la branche par Pull Request et attendre la CI. Le workflow de publication du pipeline ne déploie les jobs que sur `main`.
+6. Exécuter chaque job manuellement et vérifier ses logs avant de laisser les schedulers actifs.
+7. Déployer `vil-web`, tester l'URL, l'authentification Supabase et le parcours Stripe en mode test.
 
-### PHASE 2️⃣: Comptes de Service - ✅ Complétée
-- ✅ `vil-jobs-runner@test-barometre-juridique.iam.gserviceaccount.com`
-  - Rôles: BigQuery Data Editor, Storage Object User, Secret Manager Secret Accessor
-  - Permissions: ✅ Configurées
-- ✅ `vil-scheduler@test-barometre-juridique.iam.gserviceaccount.com`
-  - Rôles: Cloud Run Admin, Service Account User
-  - Permissions: ✅ Configurées
+## Variables et secrets GitHub attendus
 
-**Statut**: Service accounts sécurisés et correctement configurés
+La présence des noms ci-dessous n'a pas été vérifiée (`gh` indisponible).
 
----
+**Secrets du workflow pipeline et du frontend :**
 
-### PHASE 3️⃣: Secrets Manager - ✅ Complétée
-8 secrets créés et prêts:
-- ✅ `llm-api-key` - Clé API LLM
-- ✅ `dataforseo-login` - Identifiant DataForSEO
-- ✅ `dataforseo-password` - Mot de passe DataForSEO
-- ✅ `neo4j-uri` - URI Neo4j Aura
-- ✅ `neo4j-user` - Utilisateur Neo4j
-- ✅ `neo4j-password` - Mot de passe Neo4j
-- ✅ `supabase-url` - URL Supabase
-- ✅ `supabase-key` - Clé API Supabase
+- `GCP_PROJECT_ID`
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `GCP_SERVICE_ACCOUNT`
+- `STRIPE_TEST_SECRET_KEY` (CI E2E)
 
-**Statut**: À faire - Mettez à jour les valeurs des secrets avec vos vraies données
+**Variables du frontend :**
 
-```bash
-echo -n "votre-valeur-ici" | gcloud secrets versions add nom-secret --data-file=-
-```
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `STRIPE_PRICE_PRO`
 
----
+**Variables du pipeline (nécessaires au déploiement des jobs sur `main`) :**
 
-### PHASE 4️⃣: Cloud Run Jobs - ✅ Complétée
-3 Cloud Run Jobs créés et prêts:
+- `CORPUS_BUCKET`
+- `CORPUS_OBJECT`
+- `EXTRACTION_MAX_COST`
+- `EXTRACTION_COST_PER_CALL`
 
-#### Job 1: `vil-load-corpus`
-- Status: 🟢 Ready
-- Description: Charge le corpus juridique complet
-- Image: Prête pour déploiement
-- Configuration: 2 vCPU, 4GB RAM
+**Variables et secrets du job E2E :**
 
-#### Job 2: `vil-extract-notions`
-- Status: 🟢 Ready
-- Description: Extrait les notions juridiques via LLM
-- Image: Prête pour déploiement
-- Configuration: 2 vCPU, 4GB RAM
+- Variables : `E2E_GCP_PROJECT_ID`, `E2E_GCP_WORKLOAD_IDENTITY_PROVIDER`, `E2E_GCP_SERVICE_ACCOUNT`, `E2E_STRIPE_PRICE_PRO`
+- Secret : `STRIPE_TEST_SECRET_KEY`
 
-#### Job 3: `vil-gap-analysis`
-- Status: 🟢 Ready
-- Description: Analyse l'écart de couverture (D, S, I)
-- Image: Prête pour déploiement
-- Configuration: 2 vCPU, 4GB RAM
+## Vérifications après configuration
 
-**Statut**: Jobs créés, en attente de l'image Docker
-
----
-
-### PHASE 5️⃣: Cloud Scheduler - ✅ Complétée
-3 Schedulers configurés:
-
-| Job | Schedule | État | Prochaine exécution |
-|-----|----------|------|-------------------|
-| `vil-load-corpus` | 02:00 UTC | 🟢 Enabled | Demain 02:00 |
-| `vil-extract-notions` | 04:00 UTC | 🟢 Enabled | Demain 04:00 |
-| `vil-gap-analysis` | 06:00 UTC | 🟢 Enabled | Demain 06:00 |
-
-**Statut**: Orchestration automatique active
-
----
-
-### PHASE 6️⃣: Monitoring & Logging - ✅ Complétée
-- ✅ Cloud Monitoring Dashboard créé (ID: 555434ed-6969-4c43-8267-285fd1d03c8f)
-- ✅ Log Sink vers BigQuery configuré
-  - Dataset: `vil_logs`
-  - Rétention: Infinie
-- ✅ Cloud Logging activé
-- ✅ Canaux de notification configurés
-
-**Accès aux tableaux de bord**:
-- Dashboard: https://console.cloud.google.com/monitoring/dashboards?project=test-barometre-juridique
-- Logs: https://console.cloud.google.com/logs?project=test-barometre-juridique
-- BigQuery: https://console.cloud.google.com/bigquery?project=test-barometre-juridique&d=vil_logs
-
-**Statut**: Monitoring et observabilité opérationnels
-
----
-
-### PHASE 7️⃣: Frontend Deployment - 🟡 EN COURS
-- ✅ Dockerfile créé pour le frontend Next.js
-- ✅ GitHub Actions Workflow configuré (`deploy-frontend.yml`)
-- ✅ Script de déploiement manuel créé
-- ✅ Documentation complète rédigée
-- ✅ Repo rendu **PUBLIC**
-- 🔄 Workflow déclenché (en attente de build)
-
-**Composants déployés**:
-- ✅ Dockerfile (apps/web/Dockerfile)
-- ✅ GitHub Actions Workflow (.github/workflows/deploy-frontend.yml)
-- ✅ Script deploy (scripts/deploy-frontend.sh)
-- ✅ Documentation (FRONTEND_DEPLOYMENT.md)
-
-**Status**:
-- 🟢 Repo PUBLIC - Workflow peut s'exécuter automatiquement
-- ⏳ Build en cours sur GitHub Actions
-- Vérifiez: https://github.com/Maxim903/Vantedge-legal-intelligence/actions
-
----
-
-## 🏗️ Architecture Complète
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  GitHub Repository (PUBLIC)                │
-│                                                             │
-│  ├─ Main Branch (Protected)                               │
-│  ├─ GitHub Actions Workflows                              │
-│  │  ├─ deploy-frontend.yml ✅ AUTO-TRIGGERED             │
-│  │  └─ deploy-pipeline.yml  (À créer)                     │
-│  └─ Secrets (3 configurés) ✅                             │
-└─────────────────────────────────────────────────────────────┘
-              ↓
-┌─────────────────────────────────────────────────────────────┐
-│          Google Cloud Platform (test-barometre-juridique)   │
-│                                                             │
-│  Frontend (Cloud Run):                                     │
-│  ├─ Service: vil-web                     [EN DÉPLOIEMENT] │
-│  ├─ Image: vil-frontend/vil-web          [Build en cours] │
-│  └─ URL: https://vil-web-xxx.region-run.app              │
-│                                                             │
-│  Backend (Cloud Run Jobs):                                │
-│  ├─ vil-load-corpus                      [Prêt]           │
-│  ├─ vil-extract-notions                  [Prêt]           │
-│  └─ vil-gap-analysis                     [Prêt]           │
-│                                                             │
-│  Orchestration (Cloud Scheduler):                          │
-│  ├─ Jobs schedulés                       [Actif]          │
-│  └─ Exécution quotidienne                [Configurée]     │
-│                                                             │
-│  Data Layer:                                               │
-│  ├─ Artifact Registry                    [Prêt]           │
-│  ├─ Cloud Storage                        [Prêt]           │
-│  ├─ BigQuery                             [Prêt]           │
-│  └─ Secret Manager                       [8 secrets]      │
-│                                                             │
-│  Observabilité:                                            │
-│  ├─ Cloud Monitoring                     [Dashboard créé]  │
-│  ├─ Cloud Logging                        [Logs centralisés]│
-│  └─ Alertes                              [Configurées]    │
-└─────────────────────────────────────────────────────────────┘
-              ↓
-┌─────────────────────────────────────────────────────────────┐
-│          External Services (À configurer)                   │
-│                                                             │
-│  ├─ Supabase (Auth & Realtime)          [À connecter]     │
-│  ├─ Neo4j Aura (Graphe)                 [À configurer]    │
-│  └─ Stripe (Paiements optionnel)        [À intégrer]      │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🎯 Checklist Finale
-
-### Infrastructure
-- [x] APIs GCP activées
-- [x] Artifact Registry créé
-- [x] Service Accounts configurés
-- [x] Secrets stockés (8)
-- [x] Cloud Run Jobs créés (3)
-- [x] Cloud Schedulers configurés (3)
-- [x] Monitoring Dashboard créé
-
-### Frontend
-- [x] Dockerfile créé
-- [x] GitHub Actions Workflow créé
-- [x] Script deploy manuel créé
-- [x] Documentation écrite
-- [x] Repo rendu PUBLIC
-- [ ] Déploiement effectué (en attente)
-- [ ] Service URL testée
-- [ ] Variables d'environnement configurées
-
-### Backend Pipeline
-- [ ] Image Docker buildée et pushée
-- [ ] Secrets Secret Manager mis à jour avec vraies valeurs
-- [ ] Jobs testés manuellement
-- [ ] Logs en production vérifiés
-
-### Services Externes
-- [ ] Supabase connecté
-- [ ] Neo4j Aura configuré
-- [ ] Credentials stockés dans Secret Manager
-- [ ] Connexions testées
-
----
-
-## 📈 Prochaines Étapes Recommandées
-
-### 1️⃣ Immédiat (Maintenant)
-✅ Repo rendu PUBLIC
-⏳ Workflow GitHub Actions se déclenche automatiquement
-📍 Vérifiez la progression: https://github.com/Maxim903/Vantedge-legal-intelligence/actions
-
-### 2️⃣ Court terme (Cette semaine)
-1. Attendre la fin du build GitHub Actions (~5-10 minutes)
-2. Vérifier que le service Cloud Run est déployé
-3. Tester l'accès à l'URL du frontend
-4. Mettre à jour les secrets avec vraies valeurs
-5. Configurer les variables d'environnement frontend
-
-### 3️⃣ Moyen terme (Prochaines semaines)
-1. Configurer Supabase (auth, realtime)
-2. Connecter Neo4j Aura
-3. Mettre en place des tests de charge
-4. Configurer domaine personnalisé
-5. Mettre en place des sauvegardes automatiques
-
----
-
-## 🔗 Ressources Utiles
-
-### Documentation
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Guide de déploiement complet
-- [FRONTEND_DEPLOYMENT.md](FRONTEND_DEPLOYMENT.md) - Guide détaillé du frontend
-- [GITHUB_OIDC_SETUP.md](GITHUB_OIDC_SETUP.md) - Configuration GitHub OIDC
-
-### Liens GCP
-- [Console GCP](https://console.cloud.google.com/home?project=test-barometre-juridique)
-- [Cloud Run Services](https://console.cloud.google.com/run?project=test-barometre-juridique)
-- [Cloud Run Jobs](https://console.cloud.google.com/run/jobs?project=test-barometre-juridique)
-- [Cloud Scheduler](https://console.cloud.google.com/cloudscheduler?project=test-barometre-juridique)
-- [BigQuery](https://console.cloud.google.com/bigquery?project=test-barometre-juridique)
-- [Artifact Registry](https://console.cloud.google.com/artifacts?project=test-barometre-juridique)
-- [Secret Manager](https://console.cloud.google.com/security/secret-manager?project=test-barometre-juridique)
-
-### Liens GitHub
-- [Repository](https://github.com/Maxim903/Vantedge-legal-intelligence)
-- [GitHub Actions](https://github.com/Maxim903/Vantedge-legal-intelligence/actions)
-- [Settings → Secrets](https://github.com/Maxim903/Vantedge-legal-intelligence/settings/secrets/actions)
-
----
-
-## 🚀 Statut du Déploiement Frontend
-
-**Repo Public**: ✅ Activé  
-**Workflow Auto-Trigger**: ✅ Actif  
-**Build Status**: ⏳ En attente
-
-Suivre l'exécution:
-```bash
-# En local
-gh run list --repo Maxim903/Vantedge-legal-intelligence --limit=5
-
-# Ou visiter
-https://github.com/Maxim903/Vantedge-legal-intelligence/actions
-```
-
----
-
-**Status**: 🟡 En transition vers la production  
-**Prochaine étape**: Attendre le succès du workflow GitHub Actions
+1. CI complète, dont tests E2E sur `marts_e2e`.
+2. Exécution manuelle de `vil-load-corpus`, `vil-extract-notions` et `vil-gap-analysis`, puis contrôle des états et logs.
+3. Vérification de l'URL publique de `vil-web` et des pages principales.
+4. Parcours connexion/inscription et session Supabase.
+5. Checkout, webhook et portail Stripe avec des identifiants de test.
