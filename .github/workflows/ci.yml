@@ -183,6 +183,7 @@ jobs:
           stripe listen \
             --api-key "$STRIPE_API_KEY" \
             --device-name "$STRIPE_DEVICE_NAME" \
+            --events checkout.session.completed,customer.subscription.updated,customer.subscription.deleted \
             --forward-to http://127.0.0.1:3000/api/stripe/webhook \
             > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/stripe-listen.pid"
