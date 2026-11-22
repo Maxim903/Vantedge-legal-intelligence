@@ -166,19 +166,33 @@ jobs:
           sudo apt-get install -y stripe
       - name: Transférer les webhooks Stripe de test
         run: |
-          secret="$(stripe listen --print-secret)"
-          case "$secret" in whsec_*) ;; *) echo "Secret webhook absent" >&2; exit 1 ;; esac
-          echo "::add-mask::$secret"
-          echo "STRIPE_WEBHOOK_SECRET=$secret" >> "$GITHUB_ENV"
-          stripe listen --forward-to http://127.0.0.1:3000/api/stripe/webhook > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
+          stripe listen \
+            --api-key "$STRIPE_API_KEY" \
+            --device-name "$STRIPE_DEVICE_NAME" \
+            --forward-to http://127.0.0.1:3000/api/stripe/webhook \
+            --print-secret \
+            > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/stripe-listen.pid"
+
+          secret=""
           for attempt in $(seq 1 30); do
-            if grep -q 'Ready!' "$RUNNER_TEMP/stripe-listen.log"; then exit 0; fi
-            if ! kill -0 "$(cat "$RUNNER_TEMP/stripe-listen.pid")" 2>/dev/null; then echo "Stripe CLI arrêté" >&2; exit 1; fi
+            secret="$(grep -oE 'whsec_[A-Za-z0-9]+' "$RUNNER_TEMP/stripe-listen.log" | head -n 1)"
+            if [ -n "$secret" ] && grep -q 'Ready!' "$RUNNER_TEMP/stripe-listen.log"; then break; fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/stripe-listen.pid")" 2>/dev/null; then
+              echo "Stripe CLI arrêté" >&2
+              cat "$RUNNER_TEMP/stripe-listen.log" >&2
+              exit 1
+            fi
             sleep 1
           done
-          echo "Stripe CLI indisponible" >&2
-          exit 1
+
+          case "$secret" in whsec_*) ;; *)
+            echo "Secret webhook absent" >&2
+            cat "$RUNNER_TEMP/stripe-listen.log" >&2
+            exit 1
+          ;; esac
+          echo "::add-mask::$secret"
+          echo "STRIPE_WEBHOOK_SECRET=$secret" >> "$GITHUB_ENV"
       - name: Installer les dépendances et Chromium
         working-directory: apps/web
         run: |
